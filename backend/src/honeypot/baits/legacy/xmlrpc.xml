@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<methodResponse>
+  <params>
+    <param>
+      <value>
+        <array>
+          <data>
+            <value><string>system.listMethods</string></value>
+            <value><string>system.getCapabilities</string></value>
+            <value><string>wp.getUsersBlogs</string></value>
+            <value><string>wp.getCategories</string></value>
+          </data>
+        </array>
+      </value>
+    </param>
+  </params>
+</methodResponse>

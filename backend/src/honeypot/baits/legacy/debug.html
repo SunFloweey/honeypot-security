@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Debug Page</title>
+</head>
+
+<body>
+    <h1>Debug Information</h1>
+    <pre>
+<?php
+print_r($_SERVER);
+print_r($_GET);
+print_r($_POST);
+print_r($_COOKIE);
+
+// Database connection test
+$conn = mysqli_connect("localhost", "root", "RootP@ss123!", "secureapp_prod");
+if($conn) {
+    echo "Database: Connected\n";
+} else {
+    echo "Database: Error - " . mysqli_connect_error();
+}
+?>
+  </pre>
+</body>
+
+</html>

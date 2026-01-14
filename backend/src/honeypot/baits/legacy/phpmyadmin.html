@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>phpMyAdmin</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background: #f5f5f5;
+        }
+
+        .header {
+            background: #3c8dbc;
+            color: white;
+            padding: 15px;
+        }
+
+        .login-form {
+            max-width: 400px;
+            margin: 50px auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            background: #3c8dbc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <h1>phpMyAdmin 4.9.7</h1>
+    </div>
+    <div class="login-form">
+        <h2>Log in</h2>
+        <form method="POST">
+            <label>Username:</label>
+            <input type="text" name="pma_username" value="root">
+
+            <label>Password:</label>
+            <input type="password" name="pma_password">
+
+            <label>Server:</label>
+            <input type="text" name="pma_servername" value="localhost">
+
+            <button type="submit">Go</button>
+        </form>
+        <!-- Server: MySQL 5.7.33 -->
+    </div>
+</body>
+
+</html>
