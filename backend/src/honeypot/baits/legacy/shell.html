@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Web Shell</title>
+    <style>
+        body {
+            background: #000;
+            color: #0f0;
+            font-family: monospace;
+            padding: 20px;
+        }
+
+        input {
+            background: #111;
+            color: #0f0;
+            border: 1px solid #0f0;
+            padding: 5px;
+            width: 80%;
+        }
+
+        pre {
+            background: #111;
+            padding: 10px;
+            border: 1px solid #0f0;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Web Shell v2.1</h1>
+    <p>Current directory: /var/www/html</p>
+    <p>Server: {{USER_AGENT}}</p>
+    <form method="POST">
+        <input name="cmd" placeholder="Enter command..." value="{{CMD}}">
+        <button type="submit">Execute</button>
+    </form>
+    <pre>
+{{OUTPUT}}
+  </pre>
+</body>
+
+</html>

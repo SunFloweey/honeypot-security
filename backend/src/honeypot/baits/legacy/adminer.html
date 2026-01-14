@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Adminer - Database management</title>
+</head>
+
+<body>
+    <h1>Login - Adminer 4.8.1</h1>
+    <form method="POST">
+        <table>
+            <tr>
+                <td>System</td>
+                <td><select name="auth[driver]">
+                        <option>MySQL</option>
+                        <option>PostgreSQL</option>
+                    </select></td>
+            </tr>
+            <tr>
+                <td>Server</td>
+                <td><input name="auth[server]" value="localhost"></td>
+            </tr>
+            <tr>
+                <td>Username</td>
+                <td><input name="auth[username]" value="root"></td>
+            </tr>
+            <tr>
+                <td>Password</td>
+                <td><input type="password" name="auth[password]"></td>
+            </tr>
+            <tr>
+                <td>Database</td>
+                <td><input name="auth[db]"></td>
+            </tr>
+        </table>
+        <button type="submit">Login</button>
+    </form>
+</body>
+
+</html>
