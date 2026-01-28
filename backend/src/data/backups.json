@@ -1,0 +1,29 @@
+{
+    "success": true,
+    "backups": [
+        {
+            "id": 1,
+            "filename": "backup_2026-01-13_02-00.sql.gz",
+            "size": "245 MB",
+            "created_at": "2026-01-13T02:00:00Z",
+            "download_url": "/admin/backup/download/backup_2026-01-13_02-00.sql.gz"
+        },
+        {
+            "id": 2,
+            "filename": "backup_2026-01-12_02-00.sql.gz",
+            "size": "243 MB",
+            "created_at": "2026-01-12T02:00:00Z",
+            "download_url": "/admin/backup/download/backup_2026-01-12_02-00.sql.gz"
+        },
+        {
+            "id": 3,
+            "filename": "backup_2026-01-11_02-00.sql.gz",
+            "size": "241 MB",
+            "created_at": "2026-01-11T02:00:00Z",
+            "download_url": "/admin/backup/download/backup_2026-01-11_02-00.sql.gz"
+        }
+    ],
+    "backup_schedule": "Daily at 02:00 UTC",
+    "backup_location": "/var/backups/secureapp/",
+    "retention_days": 30
+}

@@ -1,0 +1,44 @@
+const AuthHelper = require('../utils/authHelper');
+
+/**
+ * Middleware di autenticazione per la Dashboard Reale.
+ * Richiede un header 'x-admin-token' corretto.
+ */
+
+// CRITICAL SECURITY: NO FALLBACK PASSWORD
+// Se ADMIN_TOKEN non è settato, il server deve crashare immediatamente
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
+
+if (!ADMIN_TOKEN) {
+    console.error('');
+    console.error('═══════════════════════════════════════════════════════════');
+    console.error('❌ FATAL ERROR: ADMIN_TOKEN environment variable not set!');
+    console.error('═══════════════════════════════════════════════════════════');
+    console.error('');
+    console.error('The honeypot admin dashboard requires authentication.');
+    console.error('Set the ADMIN_TOKEN in your .env file:');
+    console.error('');
+    console.error('  ADMIN_TOKEN=your-secure-random-token-here');
+    console.error('');
+    console.error('Generate a secure token:');
+    console.error('  node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
+    console.error('');
+    console.error('═══════════════════════════════════════════════════════════');
+    console.error('');
+    process.exit(1); // CRASH: meglio crash che security breach!
+}
+
+function adminAuthMiddleware(req, res, next) {
+    const token = req.headers['x-admin-token'];
+
+    if (!AuthHelper.isTokenValid(token, ADMIN_TOKEN)) {
+        console.warn(`[SECURITY] Unauthorized access attempt: Invalid or missing token from ${req.ip}`);
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    console.log(`✅ Admin Auth: Verified request from ${req.ip} for ${req.originalUrl}`);
+    next();
+}
+
+module.exports = adminAuthMiddleware;
+

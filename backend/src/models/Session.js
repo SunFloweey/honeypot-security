@@ -2,32 +2,57 @@ const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/database');
 
 const Session = sequelize.define('Session', {
-    session_key: {
+    sessionKey: {
         type: DataTypes.TEXT,
+        field: 'session_key',
         primaryKey: true
     },
-    ip_address: {
+    ipAddress: {
         type: DataTypes.INET,
+        field: 'ip_address',
         allowNull: false
     },
-    user_agent: {
-        type: DataTypes.TEXT
+    userAgent: {
+        type: DataTypes.TEXT,
+        field: 'user_agent'
     },
-    first_seen: {
+    firstSeen: {
         type: DataTypes.DATE,
+        field: 'first_seen',
         defaultValue: DataTypes.NOW
     },
-    last_seen: {
+    lastSeen: {
         type: DataTypes.DATE,
+        field: 'last_seen',
         defaultValue: DataTypes.NOW
     },
-    request_count: {
+    requestCount: {
         type: DataTypes.INTEGER,
+        field: 'request_count',
         defaultValue: 1
     },
-    max_risk_score: {
+    maxRiskScore: {
         type: DataTypes.INTEGER,
+        field: 'max_risk_score',
         defaultValue: 0
+    },
+    screenResolution: {
+        type: DataTypes.STRING,
+        field: 'screen_resolution',
+        allowNull: true
+    },
+    browserLanguage: {
+        type: DataTypes.STRING,
+        field: 'browser_language',
+        allowNull: true
+    },
+    timezone: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    platform: {
+        type: DataTypes.STRING,
+        allowNull: true
     }
 }, {
     tableName: 'sessions',
@@ -35,3 +60,4 @@ const Session = sequelize.define('Session', {
 });
 
 module.exports = Session;
+

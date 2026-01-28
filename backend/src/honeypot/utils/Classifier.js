@@ -1,6 +1,7 @@
 const Log = require('../../models/Log');
 const Classification = require('../../models/Classification');
-const { Op } = require('sequelize');
+const threatCache = require('./threatCache');
+const rulesData = require('../../data/rules.json');
 
 class Classifier {
     /**
@@ -8,63 +9,89 @@ class Classifier {
      */
     static async classify(req, logRecord, session) {
         const classifications = [];
-        const checkString = `${req.originalUrl} ${JSON.stringify(req.body)}`.toLowerCase();
 
-        // 1. Regole Statiche (Regex)
-        const staticRules = [
-            { category: 'recon', score: 20, pattern: /\/admin|\/wp-admin|\/phpmyadmin|\/\.env|\/\.git|\/config/i, msg: 'Accesso a path sensibili (Recon)' },
-            { category: 'injection', score: 50, pattern: /'|"|;|--|\bunion\b|\bselect\b|\bdrop\b|\balert\(|<script/i, msg: 'Pattern Injection rilevato' },
-            { category: 'path_traversal', score: 50, pattern: /\.\.\/|\.\.\\|etc\/passwd|windows\/system32/i, msg: 'Tentativo Path Traversal' },
-            { category: 'xxe', score: 40, pattern: /<!entity|<!doctype/i, msg: 'Tentativo XXE' }
-        ];
+        // 0. Update Threat Cache (In-Memory Tracking)
+        threatCache.trackRequest(req.sessionKey);
+
+        if (req.method === 'POST' && (req.path === '/login' || req.path === '/wp-login.php')) {
+            threatCache.trackLogin(req.sessionKey);
+        }
+
+        if (logRecord.statusCode === 404) {
+            threatCache.track404(req.sessionKey);
+        }
+
+        // 1. Regole Statiche (Regex) con Decoding
+        // Decode URI component per catchare bypass semplici (es. %27 invece di ')
+        let decodedPath = req.originalUrl;
+        let decodedBody = JSON.stringify(req.body);
+        try {
+            decodedPath = decodeURIComponent(req.originalUrl);
+        } catch (e) { /* ignore malformed URI */ }
+
+        const checkString = `${decodedPath} ${decodedBody}`.toLowerCase();
+
+        // Load and hydrate rules from JSON
+        const staticRules = rulesData.map(r => ({
+            ...r,
+            pattern: new RegExp(r.pattern, r.flags)
+        }));
 
         for (const rule of staticRules) {
             if (rule.pattern.test(checkString)) {
                 classifications.push({
-                    log_id: logRecord.id,
+                    logId: logRecord.id,
                     category: rule.category,
-                    risk_score: rule.score,
-                    pattern_matched: rule.msg
+                    riskScore: rule.score,
+                    patternMatched: rule.msg
                 });
             }
         }
 
-        // 2. Analisi Comportamentale (Stateful)
+        // 2. Analisi Comportamentale (Stateful via Cache)
 
         // Brute Force Detection (POST /login ripetuti)
+        const ONE_MINUTE = 60 * 1000;
+        const FIVE_MINUTES = 5 * 60 * 1000;
+
         if (req.method === 'POST' && (req.path === '/login' || req.path === '/wp-login.php')) {
-            const recentLogins = await Log.count({
-                where: {
-                    session_key: req.session_key,
-                    path: req.path,
-                    method: 'POST',
-                    timestamp: { [Op.gt]: new Date(Date.now() - 5 * 60 * 1000) } // ultimi 5 minuti
-                }
-            });
+            // Check cache instead of DB
+            const recentLogins = threatCache.getLoginCount(req.sessionKey, FIVE_MINUTES);
+
             if (recentLogins > 3) {
                 classifications.push({
-                    log_id: logRecord.id,
+                    logId: logRecord.id,
                     category: 'brute_force',
-                    risk_score: 40,
-                    pattern_matched: `Multipli tentativi di login (${recentLogins}) in breve tempo`
+                    riskScore: 40,
+                    patternMatched: `Multipli tentativi di login (${recentLogins}) in breve tempo`
                 });
             }
         }
 
         // Automation Detection (Alta frequenza)
-        const recentRequests = await Log.count({
-            where: {
-                session_key: req.session_key,
-                timestamp: { [Op.gt]: new Date(Date.now() - 1 * 60 * 1000) } // ultimo minuto
-            }
-        });
+        const recentRequests = threatCache.getRequestCount(req.sessionKey, ONE_MINUTE);
+
         if (recentRequests > 15) {
             classifications.push({
-                log_id: logRecord.id,
+                logId: logRecord.id,
                 category: 'automation',
-                risk_score: 30,
-                pattern_matched: `Alta frequenza di richieste (${recentRequests}/min)`
+                riskScore: 30,
+                patternMatched: `Alta frequenza di richieste (${recentRequests}/min)`
             });
+        }
+
+        // 404 Scanning (Reconnaissance)
+        if (logRecord.statusCode === 404) {
+            const recent404s = threatCache.get404Count(req.sessionKey, ONE_MINUTE);
+
+            if (recent404s > 5) {
+                classifications.push({
+                    logId: logRecord.id,
+                    category: 'recon_404',
+                    riskScore: 35,
+                    patternMatched: `Scansione aggressiva di percorsi inesistenti (${recent404s} in 1 min)`
+                });
+            }
         }
 
         // Salvataggio nel DB
@@ -82,18 +109,15 @@ class Classifier {
      * Aggiorna il punteggio di rischio della sessione
      */
     static async updateSessionRisk(session, newClassifications) {
-        // Recuperiamo tutte le categorie uniche rilevate finora per questa sessione per evitare duplicati nel calcolo del peso base,
-        // oppure sommiamo semplicemente i nuovi se vogliamo un accumulo. 
-        // La roadmap dice "Somma pesata", quindi accumuliamo ma limitiamo a 100.
-
         let addedRisk = 0;
         newClassifications.forEach(c => {
-            addedRisk += c.risk_score;
+            addedRisk += c.riskScore;
         });
 
-        const newTotal = Math.min(100, (session.max_risk_score || 0) + addedRisk);
-        await session.update({ max_risk_score: newTotal });
+        const newTotal = Math.min(100, (session.maxRiskScore || 0) + addedRisk);
+        await session.update({ maxRiskScore: newTotal });
     }
 }
 
 module.exports = Classifier;
+

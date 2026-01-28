@@ -24,7 +24,6 @@
     "express-rate-limit": "^7.1.5",
     "geoip-lite": "^1.4.10",
     "helmet": "^7.1.0",
-    "mongoose": "^8.0.0",
     "pg": "^8.16.3",
     "pg-hstore": "^2.3.4",
     "sequelize": "^6.37.7",

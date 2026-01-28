@@ -44,9 +44,6 @@ function calculateRealisticDelay(req) {
         baseDelay += 500 + Math.random() * 1000; // Upload file
     }
 
-    if (req.path.includes('/login') || req.path.includes('/auth')) {
-        baseDelay += 800 + Math.random() * 400; // Hash password check
-    }
 
     if (req.path.includes('/admin')) {
         baseDelay += 200 + Math.random() * 300; // Pannello admin (più dati)
@@ -74,7 +71,8 @@ function calculateRealisticDelay(req) {
  * Se rilevi brute force, aumenta progressivamente il delay
  */
 function adaptiveDelayMiddleware(req, res, next) {
-    const ip = req.realIp;
+    // req.ip is populated by Express (now with trust proxy enabled)
+    const ip = req.ip || '127.0.0.1';
     const recentRequests = getRecentRequestCount(ip, 60000); // Ultimi 60s
 
     let additionalDelay = 0;
@@ -92,44 +90,50 @@ function adaptiveDelayMiddleware(req, res, next) {
     }, additionalDelay);
 }
 
-// Cache in-memory per tracciare rate (semplificato)
+// SECURITY: Limit Map size to prevent Internal DoS (Memory Exhaustion)
+const MAX_CACHE_SIZE = 10000; // Track up to 10k unique IPs
 const requestCache = new Map();
+
+// DETERMINISTIC CLEANUP: Every 60 seconds
+setInterval(() => {
+    cleanupCache(120000);
+}, 60000);
 
 function getRecentRequestCount(ip, windowMs) {
     const now = Date.now();
 
     if (!requestCache.has(ip)) {
+        // FAIL-SAFE: If map is too large, don't track new IPs until cleanup
+        if (requestCache.size >= MAX_CACHE_SIZE) {
+            return 0; // Don't throttle if we can't track (safe default)
+        }
         requestCache.set(ip, []);
     }
 
     const requests = requestCache.get(ip);
 
-    // Rimuovi richieste vecchie
+    // Filter old requests (optimized: use while loop or filter)
     const recent = requests.filter(time => now - time < windowMs);
-
-    // Aggiungi questa richiesta
     recent.push(now);
 
-    // Aggiorna cache
     requestCache.set(ip, recent);
-
-    // Cleanup periodico (previene memory leak)
-    if (Math.random() < 0.01) { // 1% chance
-        cleanupCache(windowMs * 2);
-    }
-
     return recent.length;
 }
 
 function cleanupCache(maxAge) {
     const now = Date.now();
+    let cleaned = 0;
+
+    // Fast cleanup for entire Map
     for (const [ip, requests] of requestCache.entries()) {
-        const recent = requests.filter(time => now - time < maxAge);
-        if (recent.length === 0) {
+        if (requests.length === 0 || now - requests[requests.length - 1] > maxAge) {
             requestCache.delete(ip);
-        } else {
-            requestCache.set(ip, recent);
+            cleaned++;
         }
+    }
+
+    if (cleaned > 0) {
+        console.log(`🧹 Cache cleanup: removed ${cleaned} stale IP entries`);
     }
 }
 

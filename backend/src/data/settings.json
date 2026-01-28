@@ -1,0 +1,38 @@
+{
+    "success": true,
+    "settings": {
+        "app": {
+            "name": "SecureApp",
+            "version": "2.1.3",
+            "environment": "production",
+            "debug_mode": false,
+            "maintenance_mode": false
+        },
+        "database": {
+            "host": "db.internal.secureapp.com",
+            "port": 5432,
+            "name": "secureapp_prod",
+            "user": "app_user",
+            "password": "***************",
+            "max_connections": 100
+        },
+        "cache": {
+            "driver": "redis",
+            "host": "redis.internal.secureapp.com",
+            "port": 6379,
+            "ttl": 3600
+        },
+        "email": {
+            "smtp_host": "smtp.gmail.com",
+            "smtp_port": 587,
+            "from_address": "noreply@secureapp.com"
+        },
+        "security": {
+            "session_timeout": 1800,
+            "max_login_attempts": 5,
+            "password_min_length": 8,
+            "require_2fa": false,
+            "allow_password_reset": true
+        }
+    }
+}

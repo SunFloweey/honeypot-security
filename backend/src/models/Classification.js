@@ -8,8 +8,9 @@ const Classification = sequelize.define('Classification', {
         primaryKey: true,
         autoIncrement: true
     },
-    log_id: {
+    logId: {
         type: DataTypes.UUID,
+        field: 'log_id',
         references: {
             model: Log,
             key: 'id'
@@ -18,11 +19,13 @@ const Classification = sequelize.define('Classification', {
     category: {
         type: DataTypes.STRING(50)
     },
-    risk_score: {
-        type: DataTypes.INTEGER
+    riskScore: {
+        type: DataTypes.INTEGER,
+        field: 'risk_score'
     },
-    pattern_matched: {
-        type: DataTypes.TEXT
+    patternMatched: {
+        type: DataTypes.TEXT,
+        field: 'pattern_matched'
     }
 }, {
     tableName: 'classifications',
@@ -30,7 +33,8 @@ const Classification = sequelize.define('Classification', {
 });
 
 // Associations
-Classification.belongsTo(Log, { foreignKey: 'log_id' });
-Log.hasMany(Classification, { foreignKey: 'log_id' });
+Classification.belongsTo(Log, { foreignKey: 'logId' });
+Log.hasMany(Classification, { foreignKey: 'logId' });
 
 module.exports = Classification;
+

@@ -2,14 +2,14 @@ const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
 const sequelize = new Sequelize(
-    process.env.DB_NAME || 'honeypot',
-    process.env.DB_USER || 'postgres',
-    process.env.DB_PASSWORD || 'password',
+    process.env.DB_NAME,
+    process.env.DB_USER,
+    process.env.DB_PASSWORD,
     {
-        host: process.env.DB_HOST || 'localhost',
-        port: process.env.DB_PORT || 5432,
+        host: process.env.DB_HOST,
+        port: process.env.DB_PORT,
         dialect: 'postgres',
-        logging: console.log,
+        logging: false,
         pool: {
             max: 5,
             min: 0,
@@ -28,4 +28,17 @@ const testConnection = async () => {
     }
 };
 
-module.exports = { sequelize, testConnection };
+const syncDatabase = async () => {
+    try {
+        // ONLY FOR DEVELOPMENT: Auto-sync schema changes
+        // This will add missing columns like 'response_body'
+        if (process.env.NODE_ENV === 'development') {
+            await sequelize.sync({ alter: true });
+            console.log('✅ Database schema synchronized.');
+        }
+    } catch (error) {
+        console.error('❌ Unable to sync database schema:', error);
+    }
+};
+
+module.exports = { sequelize, testConnection, syncDatabase };

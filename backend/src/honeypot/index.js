@@ -1,6 +1,6 @@
 // src/honeypot/index.js
 const express = require('express');
-const requestCaptureMiddleware = require('./middleware/requestCapture');
+const honeyLoggerMiddleware = require('./middleware/honeyLogger');
 const { responseDelayMiddleware, adaptiveDelayMiddleware } = require('./middleware/responseDelay');
 
 // Import endpoint routers
@@ -19,7 +19,7 @@ const router = express.Router();
 // ==========================================
 
 // 1. Cattura ogni dettaglio della richiesta
-router.use(requestCaptureMiddleware);
+router.use(honeyLoggerMiddleware);
 
 // 2. Simula latenza realistica
 router.use(responseDelayMiddleware);
@@ -69,14 +69,11 @@ router.get('/health', (req, res) => {
         version: '2.1.3',
         database: 'connected',
         cache: 'redis-6.2.5',
-        // Info disclosure intenzionale
         environment: 'production',
         debug_mode: false,
         php_version: '7.2.34',
         server_software: 'Apache/2.4.41 (Ubuntu)'
     });
 });
-
-// 404 handler moved to server.js for better SPA integration
 
 module.exports = router;
