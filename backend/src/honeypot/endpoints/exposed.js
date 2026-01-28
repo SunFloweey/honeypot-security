@@ -19,6 +19,45 @@ const getBait = (filename) => {
 // ==========================================
 
 // ==========================================
+// Standard SEO/Scanner files
+// ==========================================
+router.get('/robots.txt', (req, res) => {
+    res.type('text/plain').send(
+        "User-agent: *\n" +
+        "Disallow: /admin/\n" +
+        "Disallow: /api/\n" +
+        "Disallow: /config/\n" +
+        "Disallow: /backup/\n" +
+        "Allow: /\n"
+    );
+});
+
+router.get('/sitemap.xml', (req, res) => {
+    res.type('application/xml').send(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+   <url>
+      <loc>https://secureapp.com/</loc>
+      <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+      <changefreq>daily</changefreq>
+      <priority>1.0</priority>
+   </url>
+   <url>
+      <loc>https://secureapp.com/login</loc>
+      <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+      <priority>0.8</priority>
+   </url>
+   <!-- Trappola per scanner -->
+   <url>
+      <loc>https://secureapp.com/admin</loc>
+      <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+      <priority>0.5</priority>
+   </url>
+</urlset>`
+    );
+});
+
+// ==========================================
 // .git directory (molto comune)
 // ==========================================
 router.get('/.git/config', (req, res) => {

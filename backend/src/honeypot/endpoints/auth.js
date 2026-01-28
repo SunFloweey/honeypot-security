@@ -11,6 +11,8 @@ const FAKE_USERS = [
     { username: 'demo', password: 'demo', role: 'user' }
 ];
 
+// simula login e registrazione, accetta qualsiasi credenziale ma non logga nessuno, cattura brute force.
+
 // Auth endpoints are now primarily handled by React for the UI.
 // The backend provides the API for login/register logic.
 

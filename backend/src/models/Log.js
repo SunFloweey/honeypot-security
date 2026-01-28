@@ -8,8 +8,9 @@ const Log = sequelize.define('Log', {
         defaultValue: DataTypes.UUIDV4,
         primaryKey: true
     },
-    session_key: {
+    sessionKey: {
         type: DataTypes.TEXT,
+        field: 'session_key',
         references: {
             model: Session,
             key: 'session_key'
@@ -25,8 +26,9 @@ const Log = sequelize.define('Log', {
     path: {
         type: DataTypes.TEXT
     },
-    query_params: {
-        type: DataTypes.JSONB
+    queryParams: {
+        type: DataTypes.JSONB,
+        field: 'query_params'
     },
     headers: {
         type: DataTypes.JSONB
@@ -34,14 +36,22 @@ const Log = sequelize.define('Log', {
     body: {
         type: DataTypes.TEXT
     },
-    ip_address: {
-        type: DataTypes.INET
+    ipAddress: {
+        type: DataTypes.INET,
+        field: 'ip_address'
     },
-    status_code: {
-        type: DataTypes.INTEGER
+    statusCode: {
+        type: DataTypes.INTEGER,
+        field: 'status_code'
     },
-    response_time_ms: {
-        type: DataTypes.INTEGER
+    responseTimeMs: {
+        type: DataTypes.INTEGER,
+        field: 'response_time_ms'
+    },
+    responseBody: {
+        type: DataTypes.TEXT,
+        field: 'response_body',
+        allowNull: true
     }
 }, {
     tableName: 'logs',
@@ -49,7 +59,8 @@ const Log = sequelize.define('Log', {
 });
 
 // Associations
-Log.belongsTo(Session, { foreignKey: 'session_key' });
-Session.hasMany(Log, { foreignKey: 'session_key' });
+Log.belongsTo(Session, { foreignKey: 'sessionKey', targetKey: 'sessionKey' });
+Session.hasMany(Log, { foreignKey: 'sessionKey', sourceKey: 'sessionKey' });
 
 module.exports = Log;
+

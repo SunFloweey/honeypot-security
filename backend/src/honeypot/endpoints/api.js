@@ -1,28 +1,40 @@
-// src/honeypot/endpoints/api.js
 const express = require('express');
+const baitService = require('../utils/baitService');
 const router = express.Router();
 
-// Database fake per API
-const FAKE_DATA = {
-    users: Array.from({ length: 50 }, (_, i) => ({
-        id: i + 1,
-        username: `user${i + 1}`,
-        email: `user${i + 1}@example.com`,
-        first_name: ['John', 'Jane', 'Bob', 'Alice', 'Charlie'][i % 5],
-        last_name: ['Doe', 'Smith', 'Johnson', 'Williams', 'Brown'][i % 5],
-        role: i < 3 ? 'admin' : 'user',
-        created_at: new Date(2024, 0, i + 1).toISOString()
-    })),
+// espone documentazione API finta che suggerisce la presenza di chiavi segrete 
 
-    posts: Array.from({ length: 30 }, (_, i) => ({
-        id: i + 1,
-        title: `Post Title ${i + 1}`,
-        content: `This is the content of post ${i + 1}. Lorem ipsum dolor sit amet.`,
-        author_id: (i % 10) + 1,
-        published: i % 3 === 0,
-        created_at: new Date(2024, i % 12, 1).toISOString()
-    }))
-};
+
+// ==========================================
+// POST /v1/login - Fake Login Endpoint
+// ==========================================
+router.post('/v1/login', (req, res) => {
+    // Logica flessibile: accetta tutto, fallisce sempre
+    const { email, password, username } = req.body;
+
+    // Delay naturale già gestito dal middleware (200-500ms)
+
+    res.status(401).json({
+        success: false,
+        error: 'Invalid credentials',
+        code: 'AUTH_FAILED',
+        timestamp: new Date().toISOString()
+    });
+});
+
+// ==========================================
+// POST /v1/upload - Fake Upload
+// ==========================================
+router.post('/v1/upload', (req, res) => {
+    const file = req.headers['content-type'] || 'unknown';
+    // Logga successo finto
+    res.status(200).json({
+        success: true,
+        message: 'File uploaded successfully',
+        path: '/uploads/temp/' + Math.random().toString(36).substring(7)
+    });
+});
+
 
 // ==========================================
 // API Documentation Page
@@ -131,7 +143,7 @@ router.get('/users', (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const role = req.query.role;
 
-    let users = [...FAKE_DATA.users];
+    let users = baitService.getUsers();
 
     // Filtro per role (vulnerabile a injection)
     if (role) {
@@ -157,10 +169,7 @@ router.get('/users', (req, res) => {
 // GET /api/users/:id - Dettaglio utente
 // ==========================================
 router.get('/users/:id', (req, res) => {
-    const id = parseInt(req.params.id);
-
-    // Vulnerabile a IDOR (Insecure Direct Object Reference)
-    const user = FAKE_DATA.users.find(u => u.id === id);
+    const user = baitService.getUserById(req.params.id);
 
     if (!user) {
         return res.status(404).json({
@@ -175,11 +184,10 @@ router.get('/users/:id', (req, res) => {
         success: true,
         data: {
             ...user,
-            // Info aggiuntive sensibili
-            last_login: new Date().toISOString(),
-            ip_address: '192.168.1.' + (id % 255),
-            session_count: Math.floor(Math.random() * 100),
-            api_key: `sk_user_${Math.random().toString(36).substring(2, 15)}`
+            lastLogin: new Date().toISOString(),
+            ipAddress: '192.168.1.' + (user.id % 255),
+            sessionCount: Math.floor(Math.random() * 100),
+            apiKey: `sk_user_${Math.random().toString(36).substring(2, 15)}`
         }
     });
 });
@@ -190,7 +198,6 @@ router.get('/users/:id', (req, res) => {
 router.post('/users', (req, res) => {
     const { username, email, password, role } = req.body;
 
-    // Validazione minima
     if (!username || !email || !password) {
         return res.status(400).json({
             success: false,
@@ -199,13 +206,12 @@ router.post('/users', (req, res) => {
         });
     }
 
-    // Simula creazione (ma non salva realmente)
     const newUser = {
-        id: FAKE_DATA.users.length + 1,
+        id: Math.floor(Math.random() * 1000),
         username,
         email,
         role: role || 'user',
-        created_at: new Date().toISOString()
+        createdAt: new Date().toISOString()
     };
 
     res.status(201).json({
@@ -219,8 +225,7 @@ router.post('/users', (req, res) => {
 // PUT /api/users/:id - Aggiorna utente
 // ==========================================
 router.put('/users/:id', (req, res) => {
-    const id = parseInt(req.params.id);
-    const user = FAKE_DATA.users.find(u => u.id === id);
+    const user = baitService.getUserById(req.params.id);
 
     if (!user) {
         return res.status(404).json({
@@ -229,12 +234,10 @@ router.put('/users/:id', (req, res) => {
         });
     }
 
-    // Vulnerabile a Mass Assignment
-    // Accetta qualsiasi campo dal body
     const updatedUser = {
         ...user,
         ...req.body,
-        updated_at: new Date().toISOString()
+        updatedAt: new Date().toISOString()
     };
 
     res.json({
@@ -250,7 +253,6 @@ router.put('/users/:id', (req, res) => {
 router.delete('/users/:id', (req, res) => {
     const id = parseInt(req.params.id);
 
-    // Controllo debole - non verifica autorizzazioni
     if (id < 1 || id > 1000) {
         return res.status(404).json({
             success: false,
@@ -261,7 +263,7 @@ router.delete('/users/:id', (req, res) => {
     res.json({
         success: true,
         message: 'User deleted successfully',
-        deleted_id: id
+        deletedId: id
     });
 });
 
@@ -271,9 +273,9 @@ router.delete('/users/:id', (req, res) => {
 router.get('/posts', (req, res) => {
     const published = req.query.published === 'true';
 
-    let posts = [...FAKE_DATA.posts];
+    let posts = baitService.getPosts();
 
-    if (published !== undefined) {
+    if (req.query.published !== undefined) {
         posts = posts.filter(p => p.published === published);
     }
 
@@ -299,27 +301,23 @@ router.get('/search', (req, res) => {
         });
     }
 
-    // Simula SQL query vulnerabile (mostrata nell'error)
     const sqlQuery = `SELECT * FROM ${type} WHERE title LIKE '%${query}%' OR content LIKE '%${query}%'`;
 
-    // Se query contiene caratteri SQL, "errore" che rivela query
     if (query.includes("'") || query.includes('"') || query.includes('--')) {
         return res.status(500).json({
             success: false,
             error: 'Database query error',
-            // Info disclosure GRAVE
-            sql_error: `Syntax error near "${query}"`,
+            sqlError: `Syntax error near "${query}"`,
             query: sqlQuery,
             hint: 'Check your input for special characters'
         });
     }
 
-    // Ricerca fake
     const results = {
-        users: FAKE_DATA.users.filter(u =>
+        users: baitService.getUsers().filter(u =>
             u.username.includes(query) || u.email.includes(query)
         ),
-        posts: FAKE_DATA.posts.filter(p =>
+        posts: baitService.getPosts().filter(p =>
             p.title.includes(query) || p.content.includes(query)
         )
     };
@@ -330,6 +328,7 @@ router.get('/search', (req, res) => {
         results: type === 'all' ? results : results[type] || []
     });
 });
+
 
 // ==========================================
 // GET /api/config - Configurazione (leak!)
@@ -399,7 +398,10 @@ router.get('/status', (req, res) => {
 router.post('/execute', (req, res) => {
     const { command, args } = req.body;
 
-    // API ESTREMAMENTE PERICOLOSA (intenzionalmente)
+    // API ESTREMAMENTE PERICOLOSA (RCE Bait)
+    // Nessuna esecuzione reale avviene qui. È solo un'esca.
+    // Il payload dell'attaccante è già stato catturato dal honeyLogger.
+
     if (!command) {
         return res.status(400).json({
             success: false,
@@ -407,15 +409,16 @@ router.post('/execute', (req, res) => {
         });
     }
 
-    // Simula esecuzione (ma logga tutto)
+    // Rispondi sempre con un successo finto per incoraggiare l'attaccante
+    // a provare altri comandi, ma senza eseguire nulla.
     res.json({
         success: true,
-        message: 'Command executed',
-        command,
-        args,
-        output: 'Command execution disabled in demo mode',
-        // Info pericolose
-        executed_at: new Date().toISOString(),
+        message: 'Command scheduled for execution',
+        jobId: `job_${Math.random().toString(36).substring(7)}`,
+        status: 'queued',
+        queuePosition: Math.floor(Math.random() * 5) + 1,
+        // Info finte
+        executedAt: null, // "Sarà eseguito a breve"
         user: 'www-data',
         shell: '/bin/bash'
     });

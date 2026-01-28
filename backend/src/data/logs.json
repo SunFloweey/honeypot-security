@@ -1,0 +1,36 @@
+{
+    "success": true,
+    "entries": [
+        {
+            "timestamp": "2026-01-13T14:32:15Z",
+            "level": "info",
+            "message": "User admin logged in",
+            "ip": "192.168.1.100"
+        },
+        {
+            "timestamp": "2026-01-13T14:15:33Z",
+            "level": "warning",
+            "message": "Failed login attempt for user admin",
+            "ip": "203.0.113.42"
+        },
+        {
+            "timestamp": "2026-01-13T13:58:09Z",
+            "level": "info",
+            "message": "Database backup completed successfully",
+            "ip": "localhost"
+        },
+        {
+            "timestamp": "2026-01-13T13:45:22Z",
+            "level": "error",
+            "message": "Connection timeout to external API",
+            "ip": "localhost"
+        },
+        {
+            "timestamp": "2026-01-13T13:30:00Z",
+            "level": "info",
+            "message": "Cron job executed: daily_cleanup",
+            "ip": "localhost"
+        }
+    ],
+    "log_file": "/var/log/secureapp/app.log"
+}

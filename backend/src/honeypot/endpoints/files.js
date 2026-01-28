@@ -5,7 +5,7 @@ const router = express.Router();
 // ==========================================
 // GET /upload - Pagina upload
 // ==========================================
-// Upload UI is now handled by React.
+// upload finti e download di file
 
 // ==========================================
 // POST /upload - Upload file

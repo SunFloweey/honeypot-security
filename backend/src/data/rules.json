@@ -1,0 +1,30 @@
+[
+    {
+        "category": "recon",
+        "score": 20,
+        "pattern": "\\/admin|\\/wp-admin|\\/phpmyadmin|\\/\\.env|\\/\\.git|\\/config",
+        "flags": "i",
+        "msg": "Accesso a path sensibili (Recon)"
+    },
+    {
+        "category": "injection",
+        "score": 50,
+        "pattern": "'|\"|;|--|\\bunion\\b|\\bselect\\b|\\bdrop\\b|\\balert\\(|<script",
+        "flags": "i",
+        "msg": "Pattern Injection rilevato"
+    },
+    {
+        "category": "path_traversal",
+        "score": 50,
+        "pattern": "\\.\\.\\/|\\.\\.\\\\|etc\\/passwd|windows\\/system32",
+        "flags": "i",
+        "msg": "Tentativo Path Traversal"
+    },
+    {
+        "category": "xxe",
+        "score": 40,
+        "pattern": "<!entity|<!doctype",
+        "flags": "i",
+        "msg": "Tentativo XXE"
+    }
+]
