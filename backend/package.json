@@ -5,7 +5,10 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "start:admin": "node admin-server.js",
+    "start:both": "node server.js & node admin-server.js",
     "dev": "nodemon server.js",
+    "dev:admin": "nodemon admin-server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -26,12 +29,14 @@
     "helmet": "^7.1.0",
     "pg": "^8.16.3",
     "pg-hstore": "^2.3.4",
+    "redis": "^5.10.0",
     "sequelize": "^6.37.7",
     "ua-parser-js": "^1.0.37",
     "winston": "^3.11.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.2"
+    "nodemon": "^3.0.2",
+    "sequelize-cli": "^6.6.5"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -1,16 +1,18 @@
-// src/honeypot/middleware/responseDelay.js
+const path = require('path');
+
+const STATIC_EXTENSIONS = new Set([
+    '.css', '.js', '.jpg', '.jpeg', '.png', '.gif', '.ico', '.svg',
+    '.woff', '.woff2', '.ttf', '.eot', '.map'
+]);
+
+const storageAdapter = require('../utils/storageAdapter');
 
 /**
  * Simula latenza realistica per rendere l'honeypot credibile
- * Un server reale non risponde istantaneamente
  */
 function responseDelayMiddleware(req, res, next) {
-    // Calcola delay basato sul tipo di operazione
     const delay = calculateRealisticDelay(req);
-
-    setTimeout(() => {
-        next();
-    }, delay);
+    setTimeout(() => next(), delay);
 }
 
 /**
@@ -19,125 +21,103 @@ function responseDelayMiddleware(req, res, next) {
 function calculateRealisticDelay(req) {
     let baseDelay = 0;
 
-    // Tipo di operazione
     switch (req.method) {
-        case 'GET':
-            baseDelay = 50 + Math.random() * 150; // 50-200ms
-            break;
+        case 'GET': baseDelay = 50 + Math.random() * 150; break;
         case 'POST':
-        case 'PUT':
-            baseDelay = 200 + Math.random() * 300; // 200-500ms (scrittura DB)
-            break;
-        case 'DELETE':
-            baseDelay = 150 + Math.random() * 250; // 150-400ms
-            break;
-        default:
-            baseDelay = 100 + Math.random() * 200;
+        case 'PUT': baseDelay = 200 + Math.random() * 300; break;
+        case 'DELETE': baseDelay = 150 + Math.random() * 250; break;
+        default: baseDelay = 100 + Math.random() * 200;
     }
 
-    // Operazioni "pesanti" richiedono più tempo
-    if (req.path.includes('/search')) {
-        baseDelay += 300 + Math.random() * 500; // Query DB complessa
-    }
+    if (req.path.includes('/search')) baseDelay += 300 + Math.random() * 500;
+    if (req.path.includes('/upload')) baseDelay += 500 + Math.random() * 1000;
+    if (req.path.includes('/admin')) baseDelay += 200 + Math.random() * 300;
 
-    if (req.path.includes('/upload')) {
-        baseDelay += 500 + Math.random() * 1000; // Upload file
-    }
-
-
-    if (req.path.includes('/admin')) {
-        baseDelay += 200 + Math.random() * 300; // Pannello admin (più dati)
-    }
-
-    // File statici sono più veloci
-    if (req.path.match(/\.(css|js|jpg|png|gif|ico)$/)) {
+    // Fast assets - No ReDoS
+    const ext = path.extname(req.path).toLowerCase();
+    if (STATIC_EXTENSIONS.has(ext)) {
         baseDelay = 10 + Math.random() * 40;
     }
 
-    // Variazione casuale per sembrare naturale (±20%)
     const variation = (Math.random() - 0.5) * 0.4;
     baseDelay = baseDelay * (1 + variation);
 
-    // Simula occasionale spike di latenza (5% chance)
-    if (Math.random() < 0.05) {
-        baseDelay += 1000 + Math.random() * 2000; // Spike 1-3s
-    }
+    if (Math.random() < 0.05) baseDelay += 1000 + Math.random() * 2000;
 
     return Math.round(baseDelay);
 }
 
 /**
  * Middleware opzionale: rallenta attaccanti aggressivi
- * Se rilevi brute force, aumenta progressivamente il delay
  */
-function adaptiveDelayMiddleware(req, res, next) {
-    // req.ip is populated by Express (now with trust proxy enabled)
+async function adaptiveDelayMiddleware(req, res, next) {
     const ip = req.ip || '127.0.0.1';
-    const recentRequests = getRecentRequestCount(ip, 60000); // Ultimi 60s
+    const TRACKING_WINDOW = 120000; // 2 minutes
+
+    // Log this request in the adapter
+    await storageAdapter.addEvent(ip, Date.now(), TRACKING_WINDOW);
+
+    // Get count for throttling (last 60s)
+    const recentRequests = await storageAdapter.getRecentRequestCount(ip, 60000);
 
     let additionalDelay = 0;
-
     if (recentRequests > 50) {
-        // Più di 50 req/min = probabilmente scanner
-        additionalDelay = 2000 + Math.random() * 3000; // 2-5s extra
-        console.log(`⏱️  Throttling aggressive scanner: ${ip} (${recentRequests} req/min)`);
+        additionalDelay = 2000 + Math.random() * 3000;
+        console.log(`⏱️  Throttling scanner: ${ip} (${recentRequests} req/min)`);
     } else if (recentRequests > 20) {
-        additionalDelay = 500 + Math.random() * 1000; // 0.5-1.5s extra
+        additionalDelay = 500 + Math.random() * 1000;
     }
 
-    setTimeout(() => {
-        next();
-    }, additionalDelay);
+    if (additionalDelay > 0) setTimeout(() => next(), additionalDelay);
+    else next();
 }
 
-// SECURITY: Limit Map size to prevent Internal DoS (Memory Exhaustion)
-const MAX_CACHE_SIZE = 10000; // Track up to 10k unique IPs
-const requestCache = new Map();
-
-// DETERMINISTIC CLEANUP: Every 60 seconds
+// Background cleanup (every 60s)
 setInterval(() => {
-    cleanupCache(120000);
+    storageAdapter.cleanup(120000);
 }, 60000);
-
-function getRecentRequestCount(ip, windowMs) {
-    const now = Date.now();
-
-    if (!requestCache.has(ip)) {
-        // FAIL-SAFE: If map is too large, don't track new IPs until cleanup
-        if (requestCache.size >= MAX_CACHE_SIZE) {
-            return 0; // Don't throttle if we can't track (safe default)
-        }
-        requestCache.set(ip, []);
-    }
-
-    const requests = requestCache.get(ip);
-
-    // Filter old requests (optimized: use while loop or filter)
-    const recent = requests.filter(time => now - time < windowMs);
-    recent.push(now);
-
-    requestCache.set(ip, recent);
-    return recent.length;
-}
-
-function cleanupCache(maxAge) {
-    const now = Date.now();
-    let cleaned = 0;
-
-    // Fast cleanup for entire Map
-    for (const [ip, requests] of requestCache.entries()) {
-        if (requests.length === 0 || now - requests[requests.length - 1] > maxAge) {
-            requestCache.delete(ip);
-            cleaned++;
-        }
-    }
-
-    if (cleaned > 0) {
-        console.log(`🧹 Cache cleanup: removed ${cleaned} stale IP entries`);
-    }
-}
 
 module.exports = {
     responseDelayMiddleware,
     adaptiveDelayMiddleware
 };
+
+// --- REFACTOR START ---
+
+let cleanupInterval = null;
+
+/**
+ * Avvia il task di pulizia background
+ */
+function startCleanupTask() {
+    if (cleanupInterval) return; // Già avviato
+
+    // Esegui pulizia ogni 60s
+    cleanupInterval = setInterval(() => {
+        storageAdapter.cleanup(120000);
+    }, 60000);
+    // Unref permette al processo di uscire anche se il timer è attivo (opzionale ma utile)
+    cleanupInterval.unref();
+}
+
+/**
+ * Ferma il task (utile per testing o shutdown)
+ */
+function stopCleanupTask() {
+    if (cleanupInterval) {
+        clearInterval(cleanupInterval);
+        cleanupInterval = null;
+    }
+}
+
+// Avvialo automaticamente all'import se necessario, 
+// oppure (MEGLIO) chiamalo nel bootstrap di server.js
+startCleanupTask();
+
+module.exports = {
+    responseDelayMiddleware,
+    adaptiveDelayMiddleware,
+    startCleanupTask, // Esporta per controllo manuale
+    stopCleanupTask
+};
+// --- REFACTOR END ---

@@ -1,125 +1,82 @@
+const { Op } = require('sequelize');
+const storageAdapter = require('./storageAdapter');
+
 /**
- * ThreatCache - In-Memory Metrics Store for Behavioral Analysis
- * Replaces expensive DB COUNT queries with high-performance memory lookups.
+ * ThreatCache - Behavioral Metrics Store
+ * Now uses StorageAdapter for horizontal scalability.
  */
 class ThreatCache {
     constructor() {
-        // Maps to store arrays of timestamps for sliding window analysis
-        // Key: sessionKey, Value: [timestamp1, timestamp2, ...]
-        this.requests = new Map();
-        this.logins = new Map();
-        this.errors404 = new Map();
+        this.MAX_WINDOW_MS = 300000; // 5 minutes 
+        this.isHydrated = false;
 
-        // Max entries to prevent memory exhaustion
-        this.MAX_ENTRIES = 10000;
-
-        // Cleanup interval (every 30 seconds)
-        setInterval(() => this.cleanup(), 30000);
+        // Background cleanup 
+        setInterval(() => storageAdapter.cleanup(this.MAX_WINDOW_MS), 60000);
     }
 
     /**
-     * Track a general request for a session
+     * Hydrate cache from DB on startup
      */
-    trackRequest(sessionKey) {
-        this._addEvent(this.requests, sessionKey);
-    }
+    async hydrate() {
+        if (this.isHydrated) return;
 
-    /**
-     * Track a login attempt
-     */
-    trackLogin(sessionKey) {
-        this._addEvent(this.logins, sessionKey);
-    }
+        try {
+            const Log = require('../../models/Log');
+            const cutoff = new Date(Date.now() - this.MAX_WINDOW_MS);
 
-    /**
-     * Track a 404 error
-     */
-    track404(sessionKey) {
-        this._addEvent(this.errors404, sessionKey);
-    }
+            console.log('🔄 [ThreatCache] Hydrating behavioral state from DB...');
 
-    /**
-     * Get count of requests in the last N milliseconds
-     */
-    getRequestCount(sessionKey, windowMs) {
-        return this._getCount(this.requests, sessionKey, windowMs);
-    }
+            const recentLogs = await Log.findAll({
+                where: { timestamp: { [Op.gte]: cutoff } },
+                attributes: ['sessionKey', 'timestamp', 'path', 'method', 'statusCode'],
+                raw: true
+            });
 
-    /**
-     * Get count of login attempts in the last N milliseconds
-     */
-    getLoginCount(sessionKey, windowMs) {
-        return this._getCount(this.logins, sessionKey, windowMs);
-    }
+            for (const log of recentLogs) {
+                const ts = log.timestamp.getTime();
+                const key = log.sessionKey;
 
-    /**
-     * Get count of 404 errors in the last N milliseconds
-     */
-    get404Count(sessionKey, windowMs) {
-        return this._getCount(this.errors404, sessionKey, windowMs);
-    }
+                // Track through adapter
+                await storageAdapter.addEvent(`req:${key}`, ts, this.MAX_WINDOW_MS);
 
-    // INTERNAL HELPERS
+                if (log.method === 'POST' && (log.path === '/login' || log.path === '/wp-login.php')) {
+                    await storageAdapter.addEvent(`login:${key}`, ts, this.MAX_WINDOW_MS);
+                }
 
-    _addEvent(map, key) {
-        if (!map.has(key)) {
-            // Safety cap
-            if (map.size >= this.MAX_ENTRIES) return;
-            map.set(key, []);
-        }
-
-        const timestamps = map.get(key);
-        timestamps.push(Date.now());
-
-        // Optional: trim if too long to save memory immediately (e.g. keep max 1000 timestamps)
-        if (timestamps.length > 200) {
-            // Keep only last 200 events (sufficient for our rate limits)
-            map.set(key, timestamps.slice(-200));
-        }
-    }
-
-    _getCount(map, key, windowMs) {
-        if (!map.has(key)) return 0;
-
-        const now = Date.now();
-        const timestamps = map.get(key);
-
-        // Count events within the window
-        // Optimization: iterate from end to start
-        let count = 0;
-        for (let i = timestamps.length - 1; i >= 0; i--) {
-            if (now - timestamps[i] <= windowMs) {
-                count++;
-            } else {
-                break; // Events are sorted by time, so we can stop early
+                if (log.statusCode === 404) {
+                    await storageAdapter.addEvent(`404:${key}`, ts, this.MAX_WINDOW_MS);
+                }
             }
+
+            this.isHydrated = true;
+            console.log(`✅ [ThreatCache] Hydration complete. Processed ${recentLogs.length} events.`);
+        } catch (err) {
+            console.error('❌ [ThreatCache] Hydration failed:', err.message);
         }
-        return count;
     }
 
-    cleanup() {
-        const now = Date.now();
-        const MAX_AGE = 300000; // 5 minutes (max window we use)
-
-        this._cleanMap(this.requests, now, MAX_AGE);
-        this._cleanMap(this.logins, now, MAX_AGE);
-        this._cleanMap(this.errors404, now, MAX_AGE);
+    async trackRequest(sessionKey) {
+        await storageAdapter.addEvent(`req:${sessionKey}`, Date.now(), this.MAX_WINDOW_MS);
     }
 
-    _cleanMap(map, now, maxAge) {
-        for (const [key, timestamps] of map.entries()) {
-            // Filter out old timestamps
-            // Find finding the index of the first valid timestamp could be faster than filter for large arrays
-            const validTimestamps = timestamps.filter(t => now - t < maxAge);
+    async trackLogin(sessionKey) {
+        await storageAdapter.addEvent(`login:${sessionKey}`, Date.now(), this.MAX_WINDOW_MS);
+    }
 
-            if (validTimestamps.length === 0) {
-                map.delete(key);
-            } else if (validTimestamps.length < timestamps.length) {
-                map.set(key, validTimestamps);
-            }
-        }
+    async track404(sessionKey) {
+        await storageAdapter.addEvent(`404:${sessionKey}`, Date.now(), this.MAX_WINDOW_MS);
+    }
 
-        console.log(`🧹 [ThreatCache] Cleanup completed. Active sessions tracked: ${map.size}`);
+    async getRequestCount(sessionKey, windowMs) {
+        return await storageAdapter.getRecentRequestCount(`req:${sessionKey}`, windowMs);
+    }
+
+    async getLoginCount(sessionKey, windowMs) {
+        return await storageAdapter.getRecentRequestCount(`login:${sessionKey}`, windowMs);
+    }
+
+    async get404Count(sessionKey, windowMs) {
+        return await storageAdapter.getRecentRequestCount(`404:${sessionKey}`, windowMs);
     }
 }
 

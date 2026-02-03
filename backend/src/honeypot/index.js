@@ -1,6 +1,6 @@
 // src/honeypot/index.js
 const express = require('express');
-const honeyLoggerMiddleware = require('./middleware/honeyLogger');
+const { requestCaptureMiddleware: honeyLoggerMiddleware } = require('./middleware/honeyLogger');
 const { responseDelayMiddleware, adaptiveDelayMiddleware } = require('./middleware/responseDelay');
 
 // Import endpoint routers
@@ -11,6 +11,9 @@ const filesEndpoints = require('./endpoints/files');
 const exposedEndpoints = require('./endpoints/exposed');
 const legacyEndpoints = require('./endpoints/legacy');
 const dashboardEndpoints = require('./endpoints/dashboard');
+const { adminAuthMiddleware } = require('./middleware/adminAuth');
+const publicEndpoints = require('./endpoints/public');
+const protectedEndpoints = require('./endpoints/protected');
 
 const router = express.Router();
 
@@ -18,8 +21,8 @@ const router = express.Router();
 // MIDDLEWARE GLOBALI HONEYPOT
 // ==========================================
 
-// 1. Cattura ogni dettaglio della richiesta
-router.use(honeyLoggerMiddleware);
+// 1. Cattura ogni dettaglio della richiesta (Disattivato qui perché è già globale in app.js)
+// router.use(honeyLoggerMiddleware);
 
 // 2. Simula latenza realistica
 router.use(responseDelayMiddleware);
@@ -41,8 +44,16 @@ router.use('/admin', adminEndpoints);
 router.use('/administrator', adminEndpoints);
 router.use('/wp-admin', adminEndpoints); // WordPress target popolare
 
-// API endpoints (/api/users, /api/posts, ecc.)
+// API endpoints (/api/users, /api/posts, ecc.) - HONEYPOT BAIT
 router.use('/api', apiEndpoints);
+
+// Real Dashboard API (Authenticated) - DATA SOURCES
+router.use('/api', adminAuthMiddleware, dashboardEndpoints);
+
+// ==========================================
+// PROTECTED ENDPOINTS (403/401 - Realistic Security)
+// ==========================================
+router.use('/', protectedEndpoints);
 
 // File operations (/upload, /download, /files)
 router.use('/', filesEndpoints);
@@ -53,8 +64,12 @@ router.use('/', exposedEndpoints);
 // Legacy endpoints (*.php, *.asp, /cgi-bin)
 router.use('/', legacyEndpoints);
 
-// Real Admin Statistics (NOT accessible to attackers)
-router.use('/stats', dashboardEndpoints);
+// NOTE: Admin dashboard is now on separate server (admin-server.js:4003)
+
+// ==========================================
+// PUBLIC ENDPOINTS (200 OK - Legitimate Facade)
+// ==========================================
+router.use('/', publicEndpoints);
 
 // ==========================================
 // ROOT ENDPOINTS (Now handled by React, but kept for API/Health)

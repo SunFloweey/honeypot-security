@@ -9,7 +9,7 @@ const Log = sequelize.define('Log', {
         primaryKey: true
     },
     sessionKey: {
-        type: DataTypes.TEXT,
+        type: DataTypes.STRING(32),
         field: 'session_key',
         references: {
             model: Session,
@@ -55,7 +55,12 @@ const Log = sequelize.define('Log', {
     }
 }, {
     tableName: 'logs',
-    timestamps: false
+    timestamps: false,
+    indexes: [
+        { fields: ['session_key'] },
+        { fields: ['timestamp'] },
+        { fields: ['ip_address'] }
+    ]
 });
 
 // Associations
