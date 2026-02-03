@@ -3,14 +3,31 @@ const { Op, fn, col } = require('sequelize');
 const Log = require('../../models/Log');
 const Session = require('../../models/Session');
 const Classification = require('../../models/Classification');
-const adminAuthMiddleware = require('../middleware/adminAuth');
+const notificationService = require('../utils/notificationService');
 
 const router = express.Router();
 
-// FORNISCE DATI REALI alla dashboard reale 
+// ==========================================
+// REAL-TIME NOTIFICATIONS (SS)
+// ==========================================
+router.get('/stream', (req, res) => {
+    // Headers obbligatori per SSE
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
 
-// Proteggi TUTTE le rotte di questo router
-router.use(adminAuthMiddleware);
+    // Aggiungi client
+    notificationService.addClient(res);
+
+    // Gestione disconnessione
+    req.on('close', () => {
+        notificationService.removeClient(res);
+    });
+});
+
+// FORNISCE DATI REALI alla dashboard reale 
+// Auth e rate limiting sono applicati in index.js prima di montare questo router
 
 /**
  * DB Check - Verifica connessione e tabelle
@@ -65,10 +82,30 @@ router.get('/overview', async (req, res) => {
             raw: true
         });
 
+        // 4. Time Series (Ultime 24h per ora)
+        // Usa date_trunc per raggruppare per ora (PostgreSQL)
+        const timeSeriesRaw = await Log.findAll({
+            attributes: [
+                [fn('date_trunc', 'hour', col('timestamp')), 'hour_bucket'],
+                [fn('COUNT', col('id')), 'count']
+            ],
+            where: { timestamp: { [Op.gte]: last24h } },
+            group: [fn('date_trunc', 'hour', col('timestamp'))],
+            order: [[fn('date_trunc', 'hour', col('timestamp')), 'ASC']],
+            raw: true
+        });
+
+        // Formatta per Recharts (es. "14:00")
+        const timeSeries = timeSeriesRaw.map(entry => ({
+            time: new Date(entry.hour_bucket).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            requests: parseInt(entry.count, 10)
+        }));
+
         res.json({
             period: '24h',
             summary: { totalLogs, totalSessions },
             attacks: attackStats,
+            timeSeries, // <--- Aggiunto qui
             topIPs
         });
     } catch (err) {

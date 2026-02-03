@@ -1,4 +1,5 @@
 const AuthHelper = require('../utils/authHelper');
+const rateLimit = require('express-rate-limit');
 
 /**
  * Middleware di autenticazione per la Dashboard Reale.
@@ -28,6 +29,20 @@ if (!ADMIN_TOKEN) {
     process.exit(1); // CRASH: meglio crash che security breach!
 }
 
+// STRICT RATE LIMITING per prevenire brute force del token
+const adminRateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minuti
+    max: 5, // Max 5 tentativi per IP
+    message: { error: 'Too many authentication attempts. Try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    // Skippa il rate limit solo se il token è già valido
+    skip: (req) => {
+        const token = req.headers['x-admin-token'];
+        return AuthHelper.isTokenValid(token, ADMIN_TOKEN);
+    }
+});
+
 function adminAuthMiddleware(req, res, next) {
     const token = req.headers['x-admin-token'];
 
@@ -40,5 +55,4 @@ function adminAuthMiddleware(req, res, next) {
     next();
 }
 
-module.exports = adminAuthMiddleware;
-
+module.exports = { adminAuthMiddleware, adminRateLimiter };

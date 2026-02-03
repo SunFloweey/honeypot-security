@@ -29,7 +29,11 @@ const Classification = sequelize.define('Classification', {
     }
 }, {
     tableName: 'classifications',
-    timestamps: false
+    timestamps: false,
+    indexes: [
+        { fields: ['log_id'] },
+        { fields: ['category'] }
+    ]
 });
 
 // Associations

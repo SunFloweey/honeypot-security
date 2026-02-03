@@ -3,7 +3,7 @@ const { sequelize } = require('../config/database');
 
 const Session = sequelize.define('Session', {
     sessionKey: {
-        type: DataTypes.TEXT,
+        type: DataTypes.STRING(32),
         field: 'session_key',
         primaryKey: true
     },
@@ -56,7 +56,11 @@ const Session = sequelize.define('Session', {
     }
 }, {
     tableName: 'sessions',
-    timestamps: false
+    timestamps: false,
+    indexes: [
+        { fields: ['ip_address'] },
+        { fields: ['last_seen'] }
+    ]
 });
 
 module.exports = Session;
