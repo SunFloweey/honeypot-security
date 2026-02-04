@@ -374,7 +374,7 @@ async function requestCaptureMiddleware(req, res, next) {
                 sessionKey: req.sessionKey,
                 method: req.method,
                 path: req.path,
-                ip: req.ipAddress,
+                ipAddress: req.ipAddress,
                 headers: req.capturedHeaders,
                 query: req.capturedQuery,
                 body: req.capturedBody
