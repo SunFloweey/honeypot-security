@@ -21,23 +21,25 @@ class ThreatRepository {
         if (!classifications || classifications.length === 0) return;
 
         let addedRisk = 0;
-        classifications.forEach(c => {
-            addedRisk += c.riskScore;
-        });
+        // Troviamo se c'è un attacco "esplosivo" tra i nuovi log
+        let hasImmediateThreat = classifications.some(c => c.riskScore >= 50);
 
-        // Calculate new total (clamped at 100)
+        classifications.forEach(c => { addedRisk += c.riskScore; });
+
         const oldTotal = session.maxRiskScore || 0;
         const newTotal = Math.min(100, oldTotal + addedRisk);
 
         await session.update({ maxRiskScore: newTotal });
 
-        // Trigger Alert if crossing threshold
-        if (newTotal >= 80 && oldTotal < 80) {
+        // LOGICA MIGLIORATA:
+        // 1. Scatta se superi 80 per la prima volta
+        // 2. OPPURE se il rischio era già alto ma è arrivato un attacco molto grave (immediate threat)
+        if ((newTotal >= 80 && oldTotal < 80) || (oldTotal >= 80 && hasImmediateThreat)) {
             notificationService.sendCriticalAlert({
                 ipAddress: session.ipAddress,
                 sessionKey: session.sessionKey,
                 riskScore: newTotal,
-                message: `Critical Risk Detected: ${session.ipAddress} (Score: ${newTotal})`
+                message: `⚠️ SECURITY ALERT: IP ${session.ipAddress} raggiunto livello critico (${newTotal}/100)`
             });
         }
     }

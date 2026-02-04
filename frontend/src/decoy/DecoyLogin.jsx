@@ -26,7 +26,8 @@ const DecoyLogin = () => {
             };
 
             // Effetto honeypot: invia le credenziali e il fingerprint al backend
-            await fetch('/api/v1/login', {
+            // Usa /trap prefix per indirizzare al server honeypot (4001)
+            await fetch('/trap/api/v1/login', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
