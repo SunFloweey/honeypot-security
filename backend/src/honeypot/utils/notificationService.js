@@ -4,6 +4,16 @@ class NotificationService extends EventEmitter {
     constructor() {
         super();
         this.clients = new Set();
+
+        // Heartbeat per mantenere vive le connessioni SSE
+        setInterval(() => this.sendHeartbeat(), 30000);
+    }
+
+    sendHeartbeat() {
+        if (this.clients.size === 0) return;
+        this.clients.forEach(client => {
+            client.write(': heartbeat\n\n');
+        });
     }
 
     /**

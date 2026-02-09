@@ -52,6 +52,25 @@ const Log = sequelize.define('Log', {
         type: DataTypes.TEXT,
         field: 'response_body',
         allowNull: true
+    },
+    riskScore: {
+        type: DataTypes.INTEGER,
+        field: 'risk_score',
+        defaultValue: 0
+    },
+    fingerprint: {
+        type: DataTypes.STRING(64),
+        allowNull: true
+    },
+    leakedIp: {
+        type: DataTypes.STRING(64),
+        field: 'leaked_ip',
+        allowNull: true
+    },
+    localIp: {
+        type: DataTypes.STRING(64),
+        field: 'local_ip',
+        allowNull: true
     }
 }, {
     tableName: 'logs',

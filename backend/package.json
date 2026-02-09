@@ -7,8 +7,8 @@
     "start": "node server.js",
     "start:admin": "node admin-server.js",
     "start:both": "node server.js & node admin-server.js",
-    "dev": "nodemon server.js",
-    "dev:admin": "nodemon admin-server.js",
+    "dev": "node scripts/kill-port.js 4001 && nodemon server.js",
+    "dev:admin": "node scripts/kill-port.js 4002 && nodemon admin-server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

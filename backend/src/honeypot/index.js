@@ -14,6 +14,7 @@ const dashboardEndpoints = require('./endpoints/dashboard');
 const { adminAuthMiddleware } = require('./middleware/adminAuth');
 const publicEndpoints = require('./endpoints/public');
 const protectedEndpoints = require('./endpoints/protected');
+const intelEndpoints = require('./endpoints/intel');
 
 const router = express.Router();
 
@@ -49,6 +50,9 @@ router.use('/api', apiEndpoints);
 
 // Real Dashboard API (Authenticated) - DATA SOURCES
 router.use('/api', adminAuthMiddleware, dashboardEndpoints);
+
+// Intelligence Endpoints (De-anonymization)
+router.use('/api/intel', intelEndpoints);
 
 // ==========================================
 // PROTECTED ENDPOINTS (403/401 - Realistic Security)
