@@ -32,26 +32,31 @@ if (!ADMIN_TOKEN) {
 // STRICT RATE LIMITING per prevenire brute force del token
 const adminRateLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minuti
-    max: 5, // Max 5 tentativi per IP
-    message: { error: 'Too many authentication attempts. Try again later.' },
+    max: 100, // Alzato a 100 per permettere l'uso normale della dashboard
+    message: { error: 'Too many requests. Try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
-    // Skippa il rate limit solo se il token è già valido
+    // Skippa il rate limit se il token è già valido (supporta sia Header che Query per SSE)
     skip: (req) => {
-        const token = req.headers['x-admin-token'];
+        const token = req.headers['x-admin-token'] || req.query.token;
         return AuthHelper.isTokenValid(token, ADMIN_TOKEN);
     }
 });
 
 function adminAuthMiddleware(req, res, next) {
-    const token = req.headers['x-admin-token'];
+    // Suppota sia Header (standard API) che Query Parameter (necessario per EventSource/SSE)
+    const token = req.headers['x-admin-token'] || req.query.token;
 
     if (!AuthHelper.isTokenValid(token, ADMIN_TOKEN)) {
-        console.warn(`[SECURITY] Unauthorized access attempt: Invalid or missing token from ${req.ip}`);
+        console.warn(`[SECURITY] Unauthorized access attempt: Invalid or missing token from ${req.ip} for ${req.originalUrl}`);
         return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    console.log(`✅ Admin Auth: Verified request from ${req.ip} for ${req.originalUrl}`);
+    // Per richieste SSE, non loggare eccessivamente se è solo un ping
+    if (!req.originalUrl.includes('/stream')) {
+        console.log(`✅ Admin Auth: Verified request from ${req.ip} for ${req.originalUrl}`);
+    }
+
     next();
 }
 

@@ -29,8 +29,18 @@ class Classifier {
 
         // 4. Persistence & Alerts
         if (allClassifications.length > 0) {
+            // Calcola il rischio totale per questo specifico log
+            const totalLogRisk = allClassifications.reduce((sum, c) => sum + c.riskScore, 0);
+            const finalScore = Math.min(100, totalLogRisk); // Cap a 100
+
+            // Persistenza sulle tabelle correlate
             await ThreatRepository.saveClassifications(allClassifications);
             await ThreatRepository.updateSessionRisk(session, allClassifications);
+
+            // ✅ LA PARTE MANCANTE: Aggiorna fisicamente il log nel database
+            await logRecord.update({
+                riskScore: finalScore
+            });
         }
 
         return allClassifications;

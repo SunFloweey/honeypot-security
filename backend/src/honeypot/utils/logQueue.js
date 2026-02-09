@@ -20,18 +20,17 @@ class LogQueue {
      * @param {Object} entryData - The complete log and request metadata
      */
     enqueue(entryData) {
+        if (!entryData.req || !entryData.req.sessionKey) {
+            return;
+        }
         this.buffer.push(entryData);
     }
 
     /**
-     * Process the buffer and write to the database in batches
+     * Persists the current buffer to the database and runs classification.
      */
-    /**
-     * Force flush the buffer, ignoring the lock if specified (use with caution)
-     * @param {boolean} force - If true, proceeds even if a flush is in progress (NOT RECOMMENDED for normal op)
-     */
-    async flush(force = false) {
-        if ((this.isFlushing && !force) || this.buffer.length === 0) return;
+    async flush(isExiting = false) {
+        if (this.buffer.length === 0 || (this.isFlushing && !isExiting)) return;
 
         this.isFlushing = true;
         const currentBatch = [...this.buffer];
@@ -40,89 +39,31 @@ class LogQueue {
         try {
             console.log(`📦 [LogQueue] Flushing batch of ${currentBatch.length} logs...`);
 
-            // 1. DEDUPLICATE & AGGREGATE SESSIONS
-            // Extract unique sessions and COUNT requests per session for this batch
-            const sessionMap = new Map();
+            // 1. UPDATE SESSIONS (requestCount, lastSeen)
+            const sessionUpdates = currentBatch.reduce((acc, { req }) => {
+                acc[req.sessionKey] = (acc[req.sessionKey] || 0) + 1;
+                return acc;
+            }, {});
 
-            for (const { req, sessionMetadata } of currentBatch) {
-
-                // ✅ VALIDAZIONE: Skip log se sessionKey è invalido
-                if (!req.sessionKey || req.sessionKey === 'undefined' || req.sessionKey === 'null') {
-                    console.warn('⚠️ [LogQueue] Skipping log with invalid sessionKey:', req);
-                    continue;
-                }
-
-
-                if (!sessionMap.has(req.sessionKey)) {
-                    sessionMap.set(req.sessionKey, {
-                        sessionKey: req.sessionKey,
-                        ipAddress: req.ipAddress,
-                        userAgent: req.userAgent,
-                        reqCount: 0,
-                        fingerprint: sessionMetadata?.fingerprint || {}
+            for (const [sessionKey, count] of Object.entries(sessionUpdates)) {
+                try {
+                    await Session.increment('requestCount', {
+                        by: count,
+                        where: { sessionKey }
                     });
-                }
-                // Accumulate request count locally
-                sessionMap.get(req.sessionKey).reqCount++;
-            }
-
-            const allKeys = Array.from(sessionMap.keys());
-
-            // ✅ Se non ci sono sessioni valide, esci
-            if (allKeys.length === 0) {
-                console.warn('⚠️ [LogQueue] No valid sessions in batch, skipping flush');
-                return;
-            }
-
-            // 2. BULK FETCH & UPSERT STRATEGY
-            // Fetch all existing sessions in one go
-            const existingSessions = await Session.findAll({
-                where: { sessionKey: allKeys }
-            });
-
-            const existingKeys = new Set(existingSessions.map(s => s.sessionKey));
-            const newSessionsData = [];
-            const updatePromises = [];
-
-            // A. Prepare Updates for Existing Sessions
-            for (const session of existingSessions) {
-                const batchData = sessionMap.get(session.sessionKey);
-                // Queue parallel update: increment count + update lastSeen
-                updatePromises.push(
-                    session.increment('requestCount', { by: batchData.reqCount }),
-                    session.update({ lastSeen: new Date(), ...batchData.fingerprint })
-                );
-            }
-
-            // B. Prepare Creates for New Sessions
-            for (const [key, data] of sessionMap) {
-                if (!existingKeys.has(key)) {
-                    newSessionsData.push({
-                        sessionKey: key,
-                        ipAddress: data.ipAddress,
-                        userAgent: data.userAgent,
-                        requestCount: data.reqCount, // Initialize with actual batch count
-                        lastSeen: new Date(),
-                        ...data.fingerprint
+                    await Session.update({ lastSeen: new Date() }, {
+                        where: { sessionKey }
                     });
+                } catch (err) {
+                    console.error(`⚠️ [LogQueue] Session update failed for ${sessionKey}:`, err.message);
                 }
-            }
-
-            // C. Execute DB Operations
-            // 1. Bulk Create New
-            if (newSessionsData.length > 0) {
-                await Session.bulkCreate(newSessionsData);
-            }
-            // 2. Parallel Updates Existing
-            if (updatePromises.length > 0) {
-                await Promise.all(updatePromises);
             }
 
             // 3. BULK CREATE LOGS
             const logRecords = currentBatch
                 .filter(({ req }) => req.sessionKey && req.sessionKey !== 'undefined')
                 .map(({ req, res }) => ({
-                    id: req.requestId,
+                    id: req.id,
                     sessionKey: req.sessionKey,
                     method: req.method,
                     path: req.path,
@@ -131,12 +72,14 @@ class LogQueue {
                     body: typeof req.body === 'string' ? req.body : JSON.stringify(req.body),
                     ipAddress: req.ipAddress,
                     statusCode: res.statusCode,
-                    responseTimeMs: res.responseTimeMs || 0,
-                    responseBody: res.responseBody || null
+                    responseTimeMs: res.durationMs || 0,
+                    responseBody: res.body || null,
+                    fingerprint: req.fingerprint // Salvo il fingerprint nel DB
                 }));
 
             if (logRecords.length === 0) {
                 console.warn('⚠️ [LogQueue] No valid logs to persist');
+                this.isFlushing = false;
                 return;
             }
 
@@ -144,52 +87,33 @@ class LogQueue {
 
             console.log(`✅ [LogQueue] Successfully persisted ${createdLogs.length} logs.`);
 
-            // Notify Dashboard Clients to Refresh
-            const notificationService = require('./notificationService');
-            notificationService.notifyLogBatch(createdLogs.length);
-
             // 4. BACKGROUND CLASSIFICATION (Fire-and-Forget)
-            // Decoupled from the main flush loop to prevent bottlenecks.
-            // We don't await this, so the queue is ready for the next batch immediately.
-            Promise.all(createdLogs.map(async (logRecord, index) => {
+            await Promise.all(createdLogs.map(async (logRecord) => {
                 try {
-                    // ✅ Trova l'entry corrispondente nel batch filtrato
-                    const batchIndex = currentBatch.findIndex(
-                        ({ req }) => req.requestId === logRecord.id
-                    );
+                    const originalEntry = currentBatch.find(entry => entry.req.id === logRecord.id);
+                    if (!originalEntry) return;
 
-                    if (batchIndex === -1) return;
-
-                    const { req } = currentBatch[batchIndex];
-                    const session = await Session.findByPk(req.sessionKey);
-
+                    const session = await Session.findByPk(logRecord.sessionKey);
                     if (session) {
-                        await Classifier.classify(req, logRecord, session);
+                        await Classifier.classify(originalEntry.req, logRecord, session);
                     }
                 } catch (classifyErr) {
                     console.error(`⚠️ [LogQueue] Classification error for log ${logRecord.id}:`, classifyErr.message);
                 }
-            })).then(() => {
-                // Optional: verbose logging for debugging
-                // console.log(`🔍 [LogQueue] Finished classifying batch of ${createdLogs.length}`);
-            });
+            }));
+
+            const notificationService = require('./notificationService');
+            notificationService.notifyLogBatch(createdLogs.length);
 
         } catch (err) {
             console.error('❌ [LogQueue] Error during flush:', err.message);
-            console.error('Stack trace:', err.stack); // ✅ Aggiungi stack trace per debug
-
-            // PERSISTENCE FALLBACK
             const { writeToFallbackLog } = require('../middleware/honeyLogger');
-            for (const entry of currentBatch) {
-                writeToFallbackLog(entry).catch(e =>
-                    console.error('Failed to write to fallback log:', e)
-                );
-            }
+            writeToFallbackLog(currentBatch);
         } finally {
             this.isFlushing = false;
         }
     }
 }
 
-// Singleton instance
+// Singleton Instance
 module.exports = new LogQueue();
