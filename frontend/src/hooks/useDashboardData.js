@@ -3,9 +3,9 @@ import { useAdminAuth } from './useAdminAuth';
 
 /**
  * Hook per gestire il fetching dei dati dashboard
- * Stats globali + logs filtrati per livello di rischio
+ * Stats globali + logs filtrati per livello di rischio, IP e Fingerprint
  */
-export const useDashboardData = (riskFilter = 0) => {
+export const useDashboardData = (riskFilter = 0, ipFilter = '', fingerprintFilter = '') => {
     const [stats, setStats] = useState(null);
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -17,11 +17,20 @@ export const useDashboardData = (riskFilter = 0) => {
         if (!token) return;
 
         try {
+            // Costruisci URL per i logs con filtri opzionali
+            let logsUrl = `/api/logs?limit=50&risk_min=${riskFilter}`;
+            if (ipFilter) {
+                logsUrl += `&ipAddress=${encodeURIComponent(ipFilter)}`;
+            }
+            if (fingerprintFilter) {
+                logsUrl += `&fingerprint=${encodeURIComponent(fingerprintFilter)}`;
+            }
+
             const [statsRes, logsRes] = await Promise.all([
                 fetch('/api/overview', {
                     headers: { 'x-admin-token': token }
                 }),
-                fetch(`/api/logs?limit=50&risk_min=${riskFilter}`, {
+                fetch(logsUrl, {
                     headers: { 'x-admin-token': token }
                 })
             ]);
@@ -37,7 +46,7 @@ export const useDashboardData = (riskFilter = 0) => {
         } finally {
             if (!isBackground) setLoading(false);
         }
-    }, [riskFilter, getToken, checkAuth]);
+    }, [riskFilter, ipFilter, fingerprintFilter, getToken, checkAuth]);
 
     return {
         stats,

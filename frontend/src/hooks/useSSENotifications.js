@@ -42,6 +42,7 @@ export const useSSENotifications = (onLogBatch, onSSEStatusChange) => {
                 if (data.type === 'CRITICAL_RISK') {
                     showNotification(data);
                 } else if (data.type === 'LOG_BATCH') {
+                    console.log('🔄 SSE: Received LOG_BATCH, refreshing data...');
                     onLogBatch?.();
                 }
             } catch (e) {
