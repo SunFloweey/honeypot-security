@@ -4,14 +4,19 @@ const cors = require('cors');
 const path = require('path');
 const honeypot = require('./honeypot');
 
+const { requestCaptureMiddleware } = require('./honeypot/middleware/honeyLogger'); // Importa qui
 const app = express();
+
+// 1. PRIMO: Logger Globale (Cattura tutto: statici, 404, attacchi)
 
 // Trust the first proxy (or configured number) to prevent IP spoofing
 app.set('trust proxy', process.env.TRUST_PROXY || 1);
 
 // Middleware base
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '100kb' }));
+app.use(express.urlencoded({ extended: true, limit: '100kb' }));
+
+app.use(requestCaptureMiddleware);
 
 // Security headers intentionally weak for honey bait
 app.use(helmet({
@@ -34,17 +39,23 @@ app.use((req, res, next) => {
 });
 
 // Serve static files from React frontend
-app.use(express.static(path.join(__dirname, '../../frontend/dist')));
+const distPath = path.join(__dirname, '../../frontend/dist');
+app.use(express.static(distPath));
 
 // Mount honeypot
 app.use('/', honeypot);
 
 // Handle React routing (catch-all)
 app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api') || req.path.startsWith('/auth') || req.path.includes('.')) {
+    // Only serve index.html for non-api, non-file requests
+    const isFileRequest = req.path.includes('.');
+    const isApiRequest = req.path.startsWith('/api/') || req.path.startsWith('/auth/');
+
+    if (isApiRequest || isFileRequest) {
         return next();
     }
-    res.sendFile(path.join(__dirname, '../../frontend/dist/index.html'));
+
+    res.sendFile(path.join(distPath, 'index.html'));
 });
 
 // 404 handler

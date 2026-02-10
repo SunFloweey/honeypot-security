@@ -2,6 +2,9 @@
 const express = require('express');
 const router = express.Router();
 
+const Log = require('../../models/Log');
+const Classification = require('../../models/Classification');
+
 // Import static bait data from external JSON files
 const usersData = require('../../data/users.json');
 const settingsData = require('../../data/settings.json');
@@ -11,7 +14,24 @@ const apiKeysData = require('../../data/apiKeys.json');
 
 // Admin UI is now handled by React.
 // The backend provides API endpoints for admin data and actions.
+router.get('/logs', async (req, res) => {
+    try {
+        // 2. RECUPERA I LOG DAL DB CON LE ASSOCIAZIONI
+        const logs = await Log.findAll({
+            include: [{
+                model: Classification,
+                attributes: ['id', 'category', 'riskScore'] // Prendi solo quello che serve
+            }],
+            order: [['timestamp', 'DESC']], // I più recenti in alto
+            limit: 100 // Evita di sovraccaricare il frontend
+        });
 
+        res.json(logs);
+    } catch (error) {
+        console.error('❌ Errore recupero log:', error);
+        res.status(500).json({ error: 'Errore interno del server' });
+    }
+});
 // ==========================================
 // GET /admin/users - Lista utenti
 // ==========================================

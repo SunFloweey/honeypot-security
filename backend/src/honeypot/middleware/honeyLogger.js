@@ -1,137 +1,42 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const AuthHelper = require('../utils/authHelper');
 const logQueue = require('../utils/logQueue');
 const { generateSessionKey } = require('../utils/session');
 
-// ==========================================
-// MIDDLEWARE HONEYPOT
-// ==========================================
+const STATIC_EXTENSIONS = new Set([
+    '.css', '.js', '.jpg', '.jpeg', '.png', '.gif', '.ico', '.svg',
+    '.woff', '.woff2', '.ttf', '.eot', '.map', '.txt', '.pdf'
+]);
 
 /**
- * Emergency Fallback Logger: Writes to file if DB is down.
+ * Genera un Fingerprint unico basato sui parametri del browser
  */
-function writeToFallbackLog(data) {
-    const logDir = path.join(process.cwd(), 'logs');
-    if (!fs.existsSync(logDir)) fs.mkdirSync(logDir);
+function generateFingerprint(req) {
+    const headers = req.headers || {};
 
-    const filePath = path.join(logDir, 'emergency.log');
-    const entry = `[${new Date().toISOString()}] EMERGENCY LOG: ${JSON.stringify(data)}\n`;
-    fs.appendFileSync(filePath, entry);
-    console.error('⚠️ DB Logging Failed (Captured in emergency.log)');
+    // Elementi che compongono l'impronta:
+    // 1. User Agent (identifica browser e OS)
+    // 2. Accept-Language (identifica lingua/regione)
+    // 3. Ordine delle chiavi degli header (molto difficile da falsificare correttamente)
+    const fingerprintString = [
+        headers['user-agent'] || 'none',
+        headers['accept-language'] || 'none',
+        Object.keys(headers).join(',')
+    ].join('|');
+
+    return crypto.createHash('sha256').update(fingerprintString).digest('hex');
 }
 
 /**
- * Intercetta e Cattura TUTTI i dettagli della richiesta
+ * Redact Body con protezione anti-crash
  */
-async function requestCaptureMiddleware(req, res, next) {
-    // 0. QUICK SKIP: Ignora asset statici per risparmiare risorse e ridurre rumore nel DB
-    const isStatic = req.path.match(/\.(css|js|jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot|map)$/i)
-        || req.path.startsWith('/assets/')
-        || req.path.includes('hot-update');
-
-    if (isStatic) return next();
-
-    // Traceability: Genera un RequestID unico per l'intero ciclo di vita della richiesta
-    req.requestId = crypto.randomUUID();
-
-    const startTime = Date.now();
-    req.captureTime = new Date();
-
-    // SMART EXCLUSION: Log traffic for researchers only if authenticated
-    const adminPaths = ['/stats', '/real-dashboard', '/researcher-login'];
-    const isAdminPath = adminPaths.some(p => req.path.startsWith(p));
-
-    if (isAdminPath) {
-        const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
-        const token = req.headers['x-admin-token'];
-
-        if (AuthHelper.isTokenValid(token, ADMIN_TOKEN)) {
-            return next();
-        }
-    }
-
-    // Extract real IP (Express handles this securely via 'trust proxy' setting)
-    req.ipAddress = req.ip || '127.0.0.1';
-
-    // Generate Fingerprint & Session Key
-    req.userAgent = req.headers['user-agent'] || '';
-    // Use centralized session key generation
-    req.sessionKey = generateSessionKey(req.ipAddress, req.userAgent);
-
-    req.capturedHeaders = { ...req.headers };
-    req.capturedQuery = { ...req.query };
-    req.capturedBody = redactBody(req.body);
-
-    // SAFER RESPONSE CAPTURE: Override res.send
-    const originalSend = res.send;
-
-    res.send = function (body) {
-        const contentType = res.get('Content-Type') || '';
-        const isText = contentType.includes('text') || contentType.includes('json') || contentType.includes('javascript') || contentType.includes('xml');
-
-        if (body && isText) {
-            if (typeof body === 'string') {
-                res.responseBody = body;
-            } else if (Buffer.isBuffer(body)) {
-                res.responseBody = body.toString('utf8');
-            } else if (typeof body === 'object') {
-                res.responseBody = JSON.stringify(body);
-            }
-
-            const maxLength = 32 * 1024; // 32KB
-            if (res.responseBody && res.responseBody.length > maxLength) {
-                res.responseBody = res.responseBody.substring(0, maxLength) + '... [TRUNCATED]';
-            }
-        }
-
-        return originalSend.apply(res, arguments);
-    };
-
-    // DB Logging Hook
-    res.on('finish', () => {
-        res.responseTimeMs = Date.now() - startTime;
-
-        // ASYNC ENQUEUE: Offload heavy DB operations to a background worker
-        logQueue.enqueue({
-            req: {
-                requestId: req.requestId,
-                sessionKey: req.sessionKey,
-                method: req.method,
-                path: req.path,
-                ipAddress: req.ipAddress,
-                userAgent: req.userAgent,
-                capturedHeaders: req.capturedHeaders,
-                capturedQuery: req.capturedQuery,
-                capturedBody: req.capturedBody
-            },
-            res: {
-                statusCode: res.statusCode,
-                responseTimeMs: res.responseTimeMs,
-                responseBody: res.responseBody
-            },
-            sessionMetadata: {
-                fingerprint: req.body?.fingerprint || null
-            }
-        });
-    });
-
-    next();
-}
-
-/**
- * Safer Body Redaction
- * Creates a redacted copy without expensive JSON serialization/deserialization.
- * Enforces depth limits to prevent stack overflow from malicious payloads.
- */
-function redactBody(body) {
-    const MAX_DEPTH = 10;
-    const SENSITIVE_KEYS = /password|pwd|secret|token|key|apikey|credential/i;
+function redactBody(body, maxDepth = 5) {
+    const SENSITIVE_KEYS = /password|pwd|secret|token|key|apikey|credential|auth/i;
 
     function safeCopy(obj, depth) {
-        if (depth > MAX_DEPTH) return '[TRUNCATED_DEPTH]';
-        if (!obj || typeof obj !== 'object') return obj;
+        if (depth > maxDepth) return '[TRUNCATED_DEPTH]';
+        if (obj === null || typeof obj !== 'object') return obj;
 
         if (Array.isArray(obj)) {
             return obj.map(item => safeCopy(item, depth + 1));
@@ -153,6 +58,132 @@ function redactBody(body) {
     return safeCopy(body, 0);
 }
 
-module.exports = requestCaptureMiddleware;
+/**
+ * Emergency Fallback Logger
+ */
+async function writeToFallbackLog(data) {
+    try {
+        const logDir = path.join(process.cwd(), 'logs');
+        await fs.promises.mkdir(logDir, { recursive: true });
+        const filePath = path.join(logDir, 'emergency.log');
+        const entry = `[${new Date().toISOString()}] EMERGENCY: ${JSON.stringify(data)}\n`;
+        await fs.promises.appendFile(filePath, entry, 'utf8');
+    } catch (err) {
+        console.error('❌ CRITICAL: Emergency logger failed!', err.message);
+    }
+}
 
+/**
+ * Middleware di cattura: Traccia richieste e risposte
+ */
+async function requestCaptureMiddleware(req, res, next) {
+    // 1. SKIP VELOCE PER ASSET STATICI
+    const ext = path.extname(req.path).toLowerCase();
+    if (STATIC_EXTENSIONS.has(ext) || req.path.startsWith('/assets/')) {
+        return next();
+    }
 
+    // 2. SETUP TRACCIAMENTO
+    req.requestId = crypto.randomUUID();
+    const startTime = Date.now();
+    req.ipAddress = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
+    req.userAgent = req.headers['user-agent'] || '';
+
+    // GENERAZIONE FINGERPRINT
+    req.fingerprint = generateFingerprint(req);
+
+    // Cookie-Based Session Tracking
+    let sessionKey = null;
+    if (req.headers.cookie) {
+        const match = req.headers.cookie.match(/__hp_sess=([a-f0-9]{32})/);
+        if (match) sessionKey = match[1];
+    }
+
+    if (!sessionKey) {
+        sessionKey = generateSessionKey(req.ipAddress, req.userAgent);
+        try {
+            const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+            const cookieOptions = [
+                `__hp_sess=${sessionKey}`,
+                'Path=/',
+                'HttpOnly',
+                'SameSite=Strict',
+                'Max-Age=31536000',
+                isSecure ? 'Secure' : ''
+            ].filter(Boolean).join('; ');
+
+            const prevCookies = res.getHeader('Set-Cookie') || [];
+            res.setHeader('Set-Cookie', Array.isArray(prevCookies) ? [...prevCookies, cookieOptions] : [prevCookies, cookieOptions]);
+        } catch (e) {
+            console.error('⚠️ Failed to set session cookie:', e.message);
+        }
+    }
+    req.sessionKey = sessionKey;
+
+    // 3. CAPTURE REQUEST DATA
+    req.capturedHeaders = { ...req.headers };
+    req.capturedQuery = { ...req.query };
+    req.capturedBody = req.body ? redactBody(req.body) : null;
+
+    // 4. MONKEY PATCHING RISPOSTA
+    if (!res.__honeyPatched) {
+        res.__honeyPatched = true;
+        const _send = res.send;
+        const _json = res.json;
+        let isCaptured = false;
+
+        const capture = (body) => {
+            if (isCaptured) return;
+            try {
+                const contentType = res.get('Content-Type') || '';
+                if (body && /json|text|javascript|xml/.test(contentType)) {
+                    let data;
+                    if (typeof body === 'string') data = body;
+                    else if (Buffer.isBuffer(body)) data = body.toString('utf8');
+                    else data = JSON.stringify(body);
+
+                    const MAX_LEN = 32768; // 32KB limit per response body
+                    res.responseBody = data.length > MAX_LEN
+                        ? data.substring(0, MAX_LEN) + '... [TRUNCATED]'
+                        : data;
+                }
+                isCaptured = true;
+            } catch (e) { /* Silently fail logging */ }
+        };
+
+        res.send = function (body) { capture(body); return _send.apply(res, arguments); };
+        res.json = function (body) { capture(body); return _json.apply(res, arguments); };
+    }
+
+    // 5. SALVATAGGIO ASINCRONO AL TERMINE
+    res.on('finish', () => {
+        const duration = Date.now() - startTime;
+        logQueue.enqueue({
+            timestamp: new Date().toISOString(),
+            req: {
+                id: req.requestId,
+                sessionKey: req.sessionKey,
+                method: req.method,
+                path: req.path,
+                ipAddress: req.ipAddress,
+                headers: req.capturedHeaders,
+                query: req.capturedQuery,
+                body: req.capturedBody,
+                fingerprint: req.fingerprint // Passo il fingerprint alla coda
+            },
+            res: {
+                statusCode: res.statusCode,
+                durationMs: duration,
+                body: res.responseBody
+            }
+        });
+    });
+
+    next();
+}
+
+module.exports = {
+    requestCaptureMiddleware,
+    writeToFallbackLog,
+    redactBody
+};
