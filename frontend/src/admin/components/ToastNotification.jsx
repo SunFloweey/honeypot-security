@@ -31,7 +31,12 @@ const ToastNotification = ({ notification, onClose, onInvestigate }) => {
             </div>
             <p className="mb-1">{notification.message}</p>
             <div style={{ fontSize: '0.85rem', opacity: 0.9 }}>
-                <div>Score: {notification.riskScore}/100</div>
+                <div>Session Risk: {notification.riskScore}/100</div>
+                {notification.ipTotalRisk && (
+                    <div style={{ color: '#fef08a', fontWeight: 'bold' }}>
+                        IP Total Risk: {notification.ipTotalRisk}
+                    </div>
+                )}
                 <div className="monospace mt-1">{notification.ipAddress}</div>
             </div>
             <button

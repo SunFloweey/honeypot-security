@@ -233,14 +233,16 @@ const AdminDashboard = () => {
     // UI State
     const [selectedLog, setSelectedLog] = useState(null);
     const [riskFilter, setRiskFilter] = useState(0);
+    const [ipFilter, setIpFilter] = useState(''); // Filtro IP
+    const [fingerprintFilter, setFingerprintFilter] = useState(''); // Nuovo filtro Fingerprint
     const [view, setView] = useState('overview');
     const [viewData, setViewData] = useState(null);
 
     // Data Management
-    const { stats, logs, loading, fetchData } = useDashboardData(riskFilter);
+    const { stats, logs, loading, fetchData } = useDashboardData(riskFilter, ipFilter, fingerprintFilter);
 
     // Polling Manager (adattivo basato su SSE)
-    const { setSSEStatus } = usePollingManager(fetchData, [riskFilter]);
+    const { setSSEStatus } = usePollingManager(fetchData, [riskFilter, ipFilter, fingerprintFilter]);
 
     // SSE Real-time Notifications
     const { notification, setNotification } = useSSENotifications(
@@ -290,6 +292,12 @@ const AdminDashboard = () => {
                 refreshData={() => fetchData(true)}
                 riskFilter={riskFilter}
                 setRiskFilter={setRiskFilter}
+                ipFilter={ipFilter}
+                setIpFilter={setIpFilter}
+                availableIPs={stats?.topIPs || []}
+                fingerprintFilter={fingerprintFilter}
+                setFingerprintFilter={setFingerprintFilter}
+                topFingerprints={stats?.topFingerprints || []}
             />
 
             <main className="dashboard-main">
@@ -299,6 +307,8 @@ const AdminDashboard = () => {
                         logs={logs}
                         riskFilter={riskFilter}
                         onInvestigateLog={handleInvestigateLog}
+                        onFilterIP={setIpFilter}
+                        onFilterFingerprint={setFingerprintFilter}
                     />
                 )}
 
@@ -314,6 +324,8 @@ const AdminDashboard = () => {
                             logs={logs}
                             riskFilter={riskFilter}
                             onInvestigate={handleInvestigateLog}
+                            onFilterIP={setIpFilter}
+                            onFilterFingerprint={setFingerprintFilter}
                             limit={100}
                         />
                     </>

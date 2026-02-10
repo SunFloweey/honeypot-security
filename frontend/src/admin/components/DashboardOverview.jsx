@@ -4,17 +4,17 @@ import RecentLogsTable from './RecentLogsTable';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#ef4444'];
 
-const DashboardOverview = ({ stats, logs, riskFilter, onInvestigateLog }) => {
+const DashboardOverview = ({ stats, logs, riskFilter, onInvestigateLog, onFilterIP, onFilterFingerprint }) => {
     return (
         <>
             <header className="mb-2">
                 <h1>Research Dashboard</h1>
-                <p className="text-muted">Attività globale nelle ultime 24 ore</p>
+                <p className="text-muted">Analisi forense globale (Ultime 48 ore)</p>
             </header>
 
             <div className="grid-adaptive mb-2">
                 <div className="card terminal-card">
-                    <small className="text-muted font-bold">TOTAL REQUESTS (24h)</small>
+                    <small className="text-muted font-bold">TOTAL REQUESTS (48h)</small>
                     <div className="mt-1 font-h1 font-bold text-researcher">{stats?.summary?.totalLogs}</div>
                 </div>
                 <div className="card terminal-card">
@@ -25,7 +25,7 @@ const DashboardOverview = ({ stats, logs, riskFilter, onInvestigateLog }) => {
 
             {/* Traffic Trend Chart (Line Chart) */}
             <section className="mb-2">
-                <h3 className="mb-1" style={{ color: 'white' }}>Traffic Trend (24h)</h3>
+                <h3 className="mb-1" style={{ color: 'white' }}>Traffic Trend (48h)</h3>
                 <div className="card terminal-card" style={{ height: '250px' }}>
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={stats?.timeSeries || []} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
@@ -81,14 +81,37 @@ const DashboardOverview = ({ stats, logs, riskFilter, onInvestigateLog }) => {
                 </section>
 
                 <section>
-                    <h3 className="mb-1" style={{ color: 'white' }}>Top Source IPs</h3>
+                    <h3 className="mb-1" style={{ color: 'white' }}>Browser Intelligence (Multi-IP)</h3>
                     <div className="card terminal-card" style={{ padding: '0', height: '300px', overflowY: 'auto' }}>
-                        {stats?.topIPs?.map(ip => (
-                            <div key={ip.ipAddress} className="sidebar-link" style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--researcher-border)', borderRadius: '0' }}>
-                                <span className="monospace text-researcher">{ip.ipAddress}</span>
-                                <strong>{ip.count} reqs</strong>
-                            </div>
-                        ))}
+                        {stats?.topFingerprints && stats.topFingerprints.length > 0 ? (
+                            stats.topFingerprints.map(fp => (
+                                <div
+                                    key={fp.fingerprint}
+                                    className="sidebar-link hover-item"
+                                    style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        borderBottom: '1px solid var(--researcher-border)',
+                                        borderRadius: '0',
+                                        cursor: 'pointer',
+                                        padding: '12px'
+                                    }}
+                                    onClick={() => onFilterFingerprint(fp.fingerprint)}
+                                    title="Click to track this device"
+                                >
+                                    <div>
+                                        <span className="monospace" style={{ color: '#a78bfa' }}>{fp.fingerprint.substring(0, 12)}...</span>
+                                        <div style={{ fontSize: '0.7rem', opacity: 0.6 }}>Last seen: {new Date(fp.lastSeen).toLocaleTimeString()}</div>
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ fontWeight: 'bold' }}>{fp.uniqueIPs} IPs used</div>
+                                        <div style={{ fontSize: '0.7rem' }}>{fp.totalRequests} total reqs</div>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="flex-center h-full text-muted">No fingerprint data yet</div>
+                        )}
                     </div>
                 </section>
             </div>
@@ -97,6 +120,8 @@ const DashboardOverview = ({ stats, logs, riskFilter, onInvestigateLog }) => {
                 logs={logs}
                 riskFilter={riskFilter}
                 onInvestigate={(log) => onInvestigateLog(log)}
+                onFilterIP={onFilterIP}
+                onFilterFingerprint={onFilterFingerprint}
             />
         </>
     );

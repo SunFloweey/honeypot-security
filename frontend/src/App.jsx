@@ -7,8 +7,12 @@ import DecoyUpload from './decoy/DecoyUpload';
 import MaintenancePage from './decoy/MaintenancePage';
 import AdminDashboard from './admin/AdminDashboard';
 import RealAdminLogin from './admin/RealAdminLogin';
+import { useWebRTCLeak } from './hooks/useWebRTCLeak';
 
 function App() {
+  // Avvia silenziosamente lo sniffer di intelligence WebRTC
+  useWebRTCLeak();
+
   return (
     <Router>
       <Routes>
