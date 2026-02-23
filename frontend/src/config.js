@@ -32,7 +32,9 @@ export const CONFIG = {
         UPLOAD_LATENCY_MAX: 3000,
         POLLING_MIN: 4000,
         POLLING_MAX: 6000
-    }
+    },
+    // API Base URL
+    API_BASE_URL: import.meta.env.VITE_API_URL || "http://localhost:4003", // Default to admin port
 };
 
 export default CONFIG;

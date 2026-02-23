@@ -21,10 +21,24 @@ class Classifier {
         // 3. Behavioral Analysis (Stateful) - IO Bound
         const behaviorClassifications = await BehaviorAnalyzer.analyze(req, logRecord);
 
+        // 4. Honeytoken Detection (Intelligence)
+        const HoneytokenService = require('../../services/honeytokenService');
+        const bodyStr = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+        const checkString = `${req.path} ${bodyStr} ${JSON.stringify(req.headers)}`;
+        const matchedToken = HoneytokenService.checkToken(checkString);
+
+        const honeytokenClassifications = matchedToken ? [{
+            logId: logRecord.id,
+            category: 'honeytoken_used',
+            riskScore: 90, // Extremely high risk - they found a bait
+            patternMatched: `Utilizzato Honeytoken tracciato: ${matchedToken.type} (${matchedToken.fingerprint})`
+        }] : [];
+
         // Combine Results
         const allClassifications = [
             ...staticClassifications,
-            ...behaviorClassifications
+            ...behaviorClassifications,
+            ...honeytokenClassifications
         ];
 
         // 4. Persistence & Alerts

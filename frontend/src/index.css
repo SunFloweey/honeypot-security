@@ -580,6 +580,7 @@ button.outline:hover,
   flex: 1;
   padding: 3rem;
   overflow-y: auto;
+  min-width: 0;
 }
 
 /* Grid Systems */

@@ -32,6 +32,7 @@ app.use(adminAuthMiddleware);
 
 // Mount dashboard API
 app.use('/api', dashboardEndpoints);
+app.use('/api/ai', require('./src/honeypot/endpoints/ai-analysis'));
 
 // Health check
 app.get('/health', (req, res) => {

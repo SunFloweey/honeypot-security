@@ -1,9 +1,11 @@
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import CONFIG from '../config';
 
 const MaintenancePage = ({ title, code, message }) => {
-    const location = useLocation();
+    // Genera valori random una sola volta per render stabile e puro
+    const requestId = useMemo(() => Math.random().toString(36).substring(7).toUpperCase(), []);
+    const nodeNum = useMemo(() => Math.floor(Math.random() * 9), []);
 
     return (
         <div className="app-wrapper">
@@ -41,7 +43,7 @@ const MaintenancePage = ({ title, code, message }) => {
                 </div>
 
                 <p className="font-tiny text-muted mt-2" style={{ opacity: 0.6 }}>
-                    Request ID: {Math.random().toString(36).substring(7).toUpperCase()} | Node: GT-SO-0{Math.floor(Math.random() * 9)}
+                    Request ID: {requestId} | Node: GT-SO-0{nodeNum}
                 </p>
             </main>
 

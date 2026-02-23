@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
+const HoneytokenService = require('../../services/honeytokenService');
 
 const BAITS_PATH = path.join(__dirname, '../baits/exposed');
 
@@ -76,14 +77,15 @@ b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1 c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v
 });
 
 // ==========================================
-// Environment files
+// Environment files (Dynamic Honeytokens)
 // ==========================================
-router.get('/.env', (req, res) => {
-    res.type('text/plain').send(getBait('env.txt'));
-});
-
-router.get(['/env', '/.env.local', '/.env.production'], (req, res) => {
-    res.redirect('/.env');
+router.get(['/.env', '/env', '/.env.local', '/.env.production', '/.env.staging', '/.env.backup'], (req, res) => {
+    console.log(`🍯 [Honeytoken] .env accessed from ${req.ip} - Path: ${req.path}`);
+    const envContent = HoneytokenService.generateEnvFile({
+        appName: 'SecureApp',
+        appUrl: 'https://api.secureapp.io',
+    });
+    res.type('text/plain').send(envContent);
 });
 
 // ==========================================
@@ -107,25 +109,11 @@ router.get(['/config.php', '/configuration.php'], (req, res) => {
 });
 
 router.get('/config.json', (req, res) => {
-    res.json({
-        database: {
-            host: "db.internal.secureapp.com",
-            port: 5432,
-            name: "secureapp_prod",
-            user: "app_user",
-            password: "P@ssw0rd123!SecureDB"
-        },
-        redis: {
-            host: "redis.internal.secureapp.com",
-            port: 6379,
-            password: "RedisP@ss456!"
-        },
-        api: {
-            key: "sk_live_abc123xyz789",
-            secret: "secret_key_do_not_share_123"
-        },
-        debug: false
+    console.log(`🍯 [Honeytoken] config.json accessed from ${req.ip}`);
+    const config = HoneytokenService.generateConfigJson({
+        appName: 'SecureApp',
     });
+    res.json(config);
 });
 
 router.get('/web.config', (req, res) => {
@@ -206,6 +194,74 @@ router.get('/README.md', (req, res) => {
 // ==========================================
 router.get('/wp-config.php', (req, res) => {
     res.type('text/plain').send(getBait('wp-config.php'));
+});
+
+// ==========================================
+// ADVANCED HONEYTOKEN TRAPS
+// New high-value targets that DevOps attackers look for
+// ==========================================
+
+// Docker Compose (common in CI/CD reconnaissance)
+router.get(['/docker-compose.yml', '/docker-compose.yaml', '/docker-compose.prod.yml'], (req, res) => {
+    console.log(`🍯 [Honeytoken] Docker Compose accessed from ${req.ip}`);
+    const content = HoneytokenService.generateDockerCompose();
+    res.type('text/yaml').send(content);
+});
+
+// Kubernetes Secrets (high-value cloud target)
+router.get(['/k8s-secrets.yml', '/k8s-secrets.yaml', '/secrets.yaml', '/.kube/config'], (req, res) => {
+    console.log(`🍯 [Honeytoken] K8s Secrets accessed from ${req.ip}`);
+    const content = HoneytokenService.generateK8sSecrets();
+    res.type('text/yaml').send(content);
+});
+
+// Fake SSH directory (extremely enticing for attackers)
+router.get(['/.ssh/authorized_keys', '/.ssh/id_rsa', '/.ssh/id_rsa.pub'], (req, res) => {
+    console.log(`🍯 [Honeytoken] SSH file accessed from ${req.ip} - Path: ${req.path}`);
+    if (req.path.includes('id_rsa.pub')) {
+        res.type('text/plain').send(
+            `ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC+${require('crypto').randomBytes(32).toString('base64').replace(/[^a-zA-Z0-9]/g, '')} admin@secureapp-prod\n`
+        );
+    } else if (req.path.includes('id_rsa') && !req.path.includes('.pub')) {
+        // Fake private key (obviously fake but looks real at first glance)
+        res.type('text/plain').send(
+            `-----BEGIN OPENSSH PRIVATE KEY-----\n` +
+            Array.from({ length: 12 }, () => require('crypto').randomBytes(48).toString('base64')).join('\n') +
+            `\n-----END OPENSSH PRIVATE KEY-----\n`
+        );
+    } else {
+        res.type('text/plain').send(
+            `ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC+${require('crypto').randomBytes(24).toString('base64').replace(/[^a-zA-Z0-9]/g, '')} deploy@ci-server\n` +
+            `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI${require('crypto').randomBytes(16).toString('base64').replace(/[^a-zA-Z0-9]/g, '')} admin@secureapp.io\n`
+        );
+    }
+});
+
+// Fake debug endpoint (breadcrumb from .env TODO comments)
+router.get('/api/debug/trace', (req, res) => {
+    console.log(`🍯 [Honeytoken] Debug endpoint accessed from ${req.ip}`);
+    res.json({
+        status: 'debug_enabled',
+        server: 'app-prod-01.internal',
+        uptime: `${Math.floor(Math.random() * 90 + 10)} days`,
+        database_pool: { active: 12, idle: 8, max: 25 },
+        memory_mb: { used: 487, total: 2048 },
+        // Breadcrumbs to other fake endpoints
+        endpoints: [
+            '/api/debug/db-query?sql=SELECT+1',
+            '/api/debug/env',
+            '/api/debug/sessions',
+            '/internal/admin-v2/',
+        ],
+        _warning: 'This endpoint will be removed in v3.3. See SEC-1589.',
+    });
+});
+
+// Another debug breadcrumb
+router.get('/api/debug/env', (req, res) => {
+    console.log(`🍯 [Honeytoken] Debug env accessed from ${req.ip}`);
+    const envContent = HoneytokenService.generateEnvFile({ appName: 'SecureApp-Debug' });
+    res.type('text/plain').send(envContent);
 });
 
 module.exports = router;

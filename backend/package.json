@@ -7,8 +7,8 @@
     "start": "node server.js",
     "start:admin": "node admin-server.js",
     "start:both": "node server.js & node admin-server.js",
-    "dev": "node scripts/kill-port.js 4001 && nodemon server.js",
-    "dev:admin": "node scripts/kill-port.js 4002 && nodemon admin-server.js",
+    "dev": "node scripts/kill-port.js 4002 && nodemon server.js",
+    "dev:admin": "node scripts/kill-port.js 4003 && nodemon admin-server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -21,6 +21,7 @@
   "license": "MIT",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "axios": "^1.13.5",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
     "dotenv": "^16.3.1",
@@ -28,6 +29,7 @@
     "express-rate-limit": "^7.1.5",
     "geoip-lite": "^1.4.10",
     "helmet": "^7.1.0",
+    "openai": "^6.22.0",
     "pg": "^8.16.3",
     "pg-hstore": "^2.3.4",
     "redis": "^5.10.0",

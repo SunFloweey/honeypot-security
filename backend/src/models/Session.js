@@ -63,5 +63,8 @@ const Session = sequelize.define('Session', {
     ]
 });
 
-module.exports = Session;
+Session.associate = (models) => {
+    Session.hasMany(models.Log, { foreignKey: 'sessionKey', sourceKey: 'sessionKey' });
+};
 
+module.exports = Session;

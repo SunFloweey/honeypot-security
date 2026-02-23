@@ -26,7 +26,7 @@ const RealAdminLogin = () => {
             } else {
                 setError('Invalid Admin Token. This attempt has been logged.');
             }
-        } catch (err) {
+        } catch {
             setError('Connection failed. Is the Admin Server running?');
         } finally {
             setLoading(false);

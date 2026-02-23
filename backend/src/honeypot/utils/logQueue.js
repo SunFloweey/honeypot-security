@@ -8,7 +8,7 @@ const Classifier = require('./Classifier');
 class LogQueue {
     constructor() {
         this.buffer = [];
-        this.flushInterval = 2000; // 2 seconds
+        this.flushInterval = 5000; // 5 seconds (optimized for quota)
         this.isFlushing = false;
 
         // Start background worker
@@ -39,58 +39,95 @@ class LogQueue {
         try {
             console.log(`📦 [LogQueue] Flushing batch of ${currentBatch.length} logs...`);
 
-            // 1. UPDATE SESSIONS (requestCount, lastSeen)
-            const sessionUpdates = currentBatch.reduce((acc, { req }) => {
-                acc[req.sessionKey] = (acc[req.sessionKey] || 0) + 1;
-                return acc;
-            }, {});
+            // 1. ENSURE SESSIONS EXIST & UPDATE STATS
+            // Raggruppo per sessionKey univoca nel batch
+            const uniqueSessions = {};
+            currentBatch.forEach(({ req }) => {
+                if (!uniqueSessions[req.sessionKey]) {
+                    uniqueSessions[req.sessionKey] = {
+                        count: 0,
+                        ipAddress: req.ipAddress,
+                        userAgent: req.userAgent,
+                        firstSeen: new Date(),
+                        lastSeen: new Date()
+                    };
+                }
+                uniqueSessions[req.sessionKey].count++;
+                uniqueSessions[req.sessionKey].lastSeen = new Date();
+            });
 
-            for (const [sessionKey, count] of Object.entries(sessionUpdates)) {
+            // Upsert delle sessioni (crea se non esiste, aggiorna se esiste)
+            for (const [sessionKey, data] of Object.entries(uniqueSessions)) {
                 try {
-                    await Session.increment('requestCount', {
-                        by: count,
-                        where: { sessionKey }
+                    const [session, created] = await Session.findOrCreate({
+                        where: { sessionKey },
+                        defaults: {
+                            ipAddress: data.ipAddress,
+                            userAgent: data.userAgent,
+                            requestCount: data.count,
+                            maxRiskScore: 0,
+                            firstSeen: data.firstSeen,
+                            lastSeen: data.lastSeen
+                        }
                     });
-                    await Session.update({ lastSeen: new Date() }, {
-                        where: { sessionKey }
-                    });
+
+                    if (!created) {
+                        await session.increment('requestCount', { by: data.count });
+                        await session.update({ lastSeen: data.lastSeen });
+                    }
                 } catch (err) {
-                    console.error(`⚠️ [LogQueue] Session update failed for ${sessionKey}:`, err.message);
+                    console.error(`⚠️ [LogQueue] Session sync failed for ${sessionKey}:`, err.message);
                 }
             }
 
             // 3. BULK CREATE LOGS
+            const { v4: uuidv4 } = require('uuid');
+
             const logRecords = currentBatch
                 .filter(({ req }) => req.sessionKey && req.sessionKey !== 'undefined')
-                .map(({ req, res }) => ({
-                    id: req.id,
-                    sessionKey: req.sessionKey,
-                    method: req.method,
-                    path: req.path,
-                    queryParams: req.query,
-                    headers: req.headers,
-                    body: typeof req.body === 'string' ? req.body : JSON.stringify(req.body),
-                    ipAddress: req.ipAddress,
-                    statusCode: res.statusCode,
-                    responseTimeMs: res.durationMs || 0,
-                    responseBody: res.body || null,
-                    fingerprint: req.fingerprint // Salvo il fingerprint nel DB
-                }));
+                .map(({ req, res }) => {
+                    try {
+                        return {
+                            id: req.id || uuidv4(), // Fallback UUID
+                            sessionKey: req.sessionKey,
+                            method: req.method,
+                            path: req.path,
+                            queryParams: req.query,
+                            headers: req.headers,
+                            body: typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {}),
+                            ipAddress: req.ipAddress,
+                            statusCode: res.statusCode || 500,
+                            responseTimeMs: res.durationMs || 0,
+                            responseBody: res.body || null,
+                            fingerprint: req.fingerprint,
+                            timestamp: new Date() // Ensure timestamp is set
+                        };
+                    } catch (mapErr) {
+                        console.error('⚠️ [LogQueue] Skipping malformed log entry:', mapErr.message);
+                        return null;
+                    }
+                })
+                .filter(record => record !== null); // Filter out failed mappings
 
             if (logRecords.length === 0) {
-                console.warn('⚠️ [LogQueue] No valid logs to persist');
+                console.warn('⚠️ [LogQueue] No valid logs to persist after processing');
                 this.isFlushing = false;
                 return;
             }
 
-            const createdLogs = await Log.bulkCreate(logRecords);
+            const createdLogs = await Log.bulkCreate(logRecords, { validate: true }); // Enable validation
 
             console.log(`✅ [LogQueue] Successfully persisted ${createdLogs.length} logs.`);
 
             // 4. BACKGROUND CLASSIFICATION (Fire-and-Forget)
             await Promise.all(createdLogs.map(async (logRecord) => {
                 try {
-                    const originalEntry = currentBatch.find(entry => entry.req.id === logRecord.id);
+                    // Match by ID, handling potential UUID generation differences (unlikely here but safe)
+                    const originalEntry = currentBatch.find(entry =>
+                        (entry.req.id && entry.req.id === logRecord.id) ||
+                        (entry.req.path === logRecord.path && entry.req.method === logRecord.method) // Fallback match
+                    );
+
                     if (!originalEntry) return;
 
                     const session = await Session.findByPk(logRecord.sessionKey);
@@ -105,10 +142,20 @@ class LogQueue {
             const notificationService = require('./notificationService');
             notificationService.notifyLogBatch(createdLogs.length);
 
+            // 5. REAL-TIME THREAT SYNTHESIS (Gemini)
+            const AIService = require('../../services/aiService');
+            AIService.summarizeRecentActivity(createdLogs)
+                .then(summary => {
+                    if (summary) {
+                        notificationService.notifyThreatAnalysis(summary);
+                    }
+                })
+                .catch(err => console.error('⚠️ [LogQueue] AI Synthesis failed:', err.message));
+
         } catch (err) {
             console.error('❌ [LogQueue] Error during flush:', err.message);
-            const { writeToFallbackLog } = require('../middleware/honeyLogger');
-            writeToFallbackLog(currentBatch);
+            // Fallback: Dump to console if DB fails
+            console.error('DUMPING BATCH:', JSON.stringify(currentBatch.map(e => ({ path: e.req.path, method: e.req.method })), null, 2));
         } finally {
             this.isFlushing = false;
         }

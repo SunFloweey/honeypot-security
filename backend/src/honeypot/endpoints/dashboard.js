@@ -5,27 +5,64 @@ const Log = require('../../models/Log');
 const Session = require('../../models/Session');
 const Classification = require('../../models/Classification');
 const notificationService = require('../utils/notificationService');
+const ticketService = require('../utils/ticketService');
 
 const router = express.Router();
 
 // ==========================================
-// REAL-TIME NOTIFICATIONS (SS)
+// REAL-TIME NOTIFICATIONS (SSE)
 // ==========================================
+
+/**
+ * GET /stream-ticket
+ * Generates a short-lived ticket to authorize an SSE connection.
+ * This avoids passing the full ADMIN_TOKEN via query parameters.
+ */
+router.get('/stream-ticket', (req, res) => {
+    const ticket = ticketService.createTicket({ ip: req.ip });
+    res.json({ ticket });
+});
+
 router.get('/stream', (req, res) => {
+    // Configurazioni socket per mantenere la connessione aperta
+    req.socket.setKeepAlive(true);
+    req.socket.setTimeout(0); // Nessun timeout per SSE
+    req.socket.setNoDelay(true);
+
     // Headers obbligatori per SSE
     res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // Disabilita buffering proxy (Nginx)
     res.flushHeaders();
 
-    // Invia un commento iniziale per "aprire" il flusso e stabilizzare alcuni browser/proxy
+    // Invia un commento iniziale e heartbeat per stabilizzare la connessione
     res.write(': connected\n\n');
+    res.write(': heartbeat\n\n');
 
     // Aggiungi client
     notificationService.addClient(res);
 
+    // Heartbeat forzata immediata per confermare il link al proxy
+    const heartbeatTimer = setInterval(() => {
+        if (!res.writableEnded) {
+            res.write(': keepalive\n\n');
+        }
+    }, 45000); // Heartbeat di backup ogni 45s oltre a quello del Service
+
     // Gestione disconnessione
     req.on('close', () => {
+        clearInterval(heartbeatTimer);
+        notificationService.removeClient(res);
+        res.end();
+    });
+
+    req.on('error', (err) => {
+        clearInterval(heartbeatTimer);
+        // Evitiamo log rumorosi per interruzioni normali del socket
+        if (err.code !== 'ECONNRESET' && err.code !== 'EPIPE' && err.message !== 'aborted') {
+            console.error('SSE connection error:', err);
+        }
         notificationService.removeClient(res);
     });
 });
@@ -51,83 +88,112 @@ router.get('/db-check', async (req, res) => {
  */
 router.get('/overview', async (req, res) => {
     try {
-        const last48h = new Date(Date.now() - 48 * 60 * 60 * 1000);
+        let startTime, endTime;
+        let isSingleDay = false;
 
-        // 1. Totale richieste e sessioni
-        const totalLogs = await Log.count({ where: { timestamp: { [Op.gte]: last48h } } });
-        const totalSessions = await Session.count({ where: { lastSeen: { [Op.gte]: last48h } } });
+        if (req.query.date && req.query.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            startTime = new Date(`${req.query.date}T00:00:00.000Z`);
+            endTime = new Date(`${req.query.date}T23:59:59.999Z`);
+            isSingleDay = true;
+        } else {
+            startTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            endTime = new Date();
+        }
 
-        // 2. Distribuzione categorie attacchi
-        const attackStats = await Classification.findAll({
-            attributes: [
-                'category',
-                [fn('COUNT', col('Classification.id')), 'count']
-            ],
-            include: [{
-                model: Log,
-                attributes: [],
-                where: { timestamp: { [Op.gte]: last48h } },
-                required: true // INNER JOIN
-            }],
-            group: ['Classification.category'],
-            raw: true
-        });
+        const dateRangeClause = { [Op.between]: [startTime, endTime] };
 
-        // 3. Top IP con Risk Score aggregato
-        const topIPs = await Log.findAll({
-            attributes: [
-                'ipAddress',
-                [fn('COUNT', col('Log.id')), 'count'],
-                [fn('SUM', col('Log.risk_score')), 'totalRiskScore']
-            ],
-            where: { timestamp: { [Op.gte]: last48h } },
-            group: ['ipAddress'],
-            order: [[fn('SUM', col('Log.risk_score')), 'DESC']], // Ordina per risk score
-            limit: 5,
-            raw: true
-        });
+        // 1. Parallel execution of all dashboard queries to reduce latency
+        const [
+            totalLogs,
+            totalSessions,
+            attackStats,
+            topIPs,
+            timeSeriesRaw,
+            topFingerprints
+        ] = await Promise.all([
+            // Query 1: Total requests
+            Log.count({ where: { timestamp: dateRangeClause } }),
 
-        // 4. Time Series (Ultime 48h per ora)
-        // Usa date_trunc per raggruppare per ora (PostgreSQL)
-        const timeSeriesRaw = await Log.findAll({
-            attributes: [
-                [fn('date_trunc', 'hour', col('timestamp')), 'hour_bucket'],
-                [fn('COUNT', col('id')), 'count']
-            ],
-            where: { timestamp: { [Op.gte]: last48h } },
-            group: [fn('date_trunc', 'hour', col('timestamp'))],
-            order: [[fn('date_trunc', 'hour', col('timestamp')), 'ASC']],
-            raw: true
-        });
+            // Query 2: Unique sessions seen in period
+            Session.count({
+                where: { lastSeen: dateRangeClause }
+            }),
 
-        // Formatta per Recharts (es. "14:00")
-        const timeSeries = timeSeriesRaw.map(entry => ({
-            time: new Date(entry.hour_bucket).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            requests: parseInt(entry.count, 10)
-        }));
+            // Query 3: Attack Distribution (Joined with Classifications)
+            Log.findAll({
+                attributes: [
+                    [sequelize.col('Classifications.category'), 'category'],
+                    [sequelize.fn('COUNT', sequelize.col('Log.id')), 'count']
+                ],
+                where: { timestamp: dateRangeClause },
+                include: [{
+                    model: Classification,
+                    attributes: [],
+                    required: true
+                }],
+                group: ['Classifications.category'],
+                raw: true
+            }),
 
-        // 5. Analisi Fingerprint (Nuovo!)
-        // Identifichiamo impronte che usano più IP diversi
-        const topFingerprints = await Log.findAll({
-            attributes: [
-                'fingerprint',
-                [fn('COUNT', fn('DISTINCT', col('ip_address'))), 'uniqueIPs'],
-                [fn('COUNT', col('Log.id')), 'totalRequests'],
-                [fn('MAX', col('Log.timestamp')), 'lastSeen']
-            ],
-            where: {
-                timestamp: { [Op.gte]: last48h },
-                fingerprint: { [Op.ne]: null }
-            },
-            group: ['fingerprint'],
-            having: literal('COUNT(DISTINCT ip_address) > 0'),
-            order: [[fn('COUNT', fn('DISTINCT', col('ip_address'))), 'DESC']],
-            limit: 5,
-            raw: true
+            // Query 4: Top IPs by Risk
+            Log.findAll({
+                attributes: [
+                    'ipAddress',
+                    [fn('COUNT', col('Log.id')), 'count'],
+                    [fn('SUM', col('Log.risk_score')), 'totalRiskScore']
+                ],
+                where: { timestamp: dateRangeClause },
+                group: ['ipAddress'],
+                order: [[fn('SUM', col('Log.risk_score')), 'DESC']],
+                limit: 5,
+                raw: true
+            }),
+
+            // Query 5: Traffic Time Series
+            Log.findAll({
+                attributes: [
+                    [fn('date_trunc', isSingleDay ? 'minute' : 'hour', col('timestamp')), 'time_bucket'],
+                    [fn('COUNT', col('id')), 'count']
+                ],
+                where: { timestamp: dateRangeClause },
+                group: [fn('date_trunc', isSingleDay ? 'minute' : 'hour', col('timestamp'))],
+                order: [[fn('date_trunc', isSingleDay ? 'minute' : 'hour', col('timestamp')), 'ASC']],
+                raw: true
+            }),
+
+            // Query 6: Fingerprint Intelligence
+            Log.findAll({
+                attributes: [
+                    'fingerprint',
+                    [fn('COUNT', fn('DISTINCT', col('ip_address'))), 'uniqueIPs'],
+                    [fn('COUNT', col('Log.id')), 'totalRequests'],
+                    [fn('MAX', col('Log.timestamp')), 'lastSeen']
+                ],
+                where: {
+                    timestamp: dateRangeClause,
+                    fingerprint: { [Op.ne]: null }
+                },
+                group: ['fingerprint'],
+                having: literal('COUNT(DISTINCT ip_address) > 0'),
+                order: [[fn('COUNT', fn('DISTINCT', col('ip_address'))), 'DESC']],
+                limit: 5,
+                raw: true
+            })
+        ]);
+
+        // Formatta per Recharts (se singolo giorno mostra HH:mm, altrimenti DD/MM HH)
+        const timeSeries = timeSeriesRaw.map(entry => {
+            const date = new Date(entry.time_bucket);
+            return {
+                time: isSingleDay
+                    ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    : `${date.getDate()}/${date.getMonth() + 1} ${date.getHours()}:00`,
+                requests: parseInt(entry.count, 10)
+            };
         });
 
         res.json({
-            period: '48h',
+            period: isSingleDay ? 'Day View' : 'Last 24h',
             summary: { totalLogs, totalSessions },
             attacks: attackStats.map(a => ({ ...a, count: parseInt(a.count, 10) })),
             timeSeries,
@@ -155,12 +221,32 @@ router.get('/overview', async (req, res) => {
  */
 router.get('/logs', async (req, res) => {
     try {
-        const { limit = 50, offset = 0, category, risk_min } = req.query;
-        console.log(`🔍 Logs Request: limit=${limit}, risk_min=${risk_min}, category=${category}`);
+        const { limit = 50, offset = 0, category, risk_min, order, timespan } = req.query;
 
-        const whereClause = {
-            timestamp: { [Op.gte]: new Date(Date.now() - 48 * 60 * 60 * 1000) }
-        };
+        // Validazione della direzione: solo 'ASC' o 'DESC'
+        const sortDirection = (order && order.toUpperCase() === 'ASC') ? 'ASC' : 'DESC';
+
+        console.log(`🔍 Logs Request: limit=${limit}, risk_min=${risk_min}, category=${category}, order=${sortDirection}`);
+
+        const whereClause = {};
+        // --- LOGICA FILTRO TEMPORALE (Modificata) ---
+        // Se c'è una data specifica nel calendario, ha la priorità
+        if (req.query.date && req.query.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            console.log(`📅 Filtering logs by UTC date: ${req.query.date}`);
+            const startOfDay = new Date(`${req.query.date}T00:00:00.000Z`);
+            const endOfDay = new Date(`${req.query.date}T23:59:59.999Z`);
+            whereClause.timestamp = {
+                [Op.between]: [startOfDay, endOfDay]
+            };
+        }
+        // ALTRIMENTI, se richiesto il timespan 24h (Default Overview)
+        else if (timespan === '24h') {
+            const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            whereClause.timestamp = {
+                [Op.gte]: twentyFourHoursAgo
+            };
+            console.log("🕒 Filtering logs for the last 24 hours");
+        }
 
         // Filtro per risk_min usa il campo riskScore del Log (non le Classifications)
         if (risk_min && parseInt(risk_min) > 0) {
@@ -168,14 +254,10 @@ router.get('/logs', async (req, res) => {
         }
 
         // Filtro per indirizzo IP
-        if (req.query.ipAddress) {
-            whereClause.ipAddress = req.query.ipAddress;
-        }
+        if (req.query.ipAddress) { whereClause.ipAddress = req.query.ipAddress; }
 
         // Filtro per Fingerprint (Nuovo!)
-        if (req.query.fingerprint) {
-            whereClause.fingerprint = req.query.fingerprint;
-        }
+        if (req.query.fingerprint) { whereClause.fingerprint = req.query.fingerprint; }
 
         // Include Classifications sempre con LEFT JOIN
         // Se c'è un filtro per categoria, filtra sulle classifications
@@ -189,7 +271,7 @@ router.get('/logs', async (req, res) => {
             where: whereClause,
             include: includeClause,
             order: [
-                ['timestamp', 'DESC'], // Prima i nuovi per vedere il real-time
+                ['timestamp', sortDirection], // Prima i nuovi per vedere il real-time
                 ['riskScore', 'DESC']
             ],
             limit: parseInt(limit),

@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const logQueue = require('../utils/logQueue');
 const { generateSessionKey } = require('../utils/session');
+const AIService = require('../../services/aiService');
 
 const STATIC_EXTENSIONS = new Set([
     '.css', '.js', '.jpg', '.jpeg', '.png', '.gif', '.ico', '.svg',
@@ -77,9 +78,14 @@ async function writeToFallbackLog(data) {
  * Middleware di cattura: Traccia richieste e risposte
  */
 async function requestCaptureMiddleware(req, res, next) {
-    // 1. SKIP VELOCE PER ASSET STATICI
+    // 1. SKIP VELOCE PER ASSET STATICI E RICHIESTE DASHBOARD
     const ext = path.extname(req.path).toLowerCase();
-    if (STATIC_EXTENSIONS.has(ext) || req.path.startsWith('/assets/')) {
+    const isAdminApi = req.path.startsWith('/api/overview') ||
+        req.path.startsWith('/api/logs') ||
+        req.path.startsWith('/api/stream') ||
+        req.path.startsWith('/api/ai');
+
+    if (STATIC_EXTENSIONS.has(ext) || req.path.startsWith('/assets/') || isAdminApi) {
         return next();
     }
 
@@ -125,6 +131,19 @@ async function requestCaptureMiddleware(req, res, next) {
     req.capturedQuery = { ...req.query };
     req.capturedBody = req.body ? redactBody(req.body) : null;
 
+    // LOGICA DI ANALISI PAYLOAD (Threat Intelligence)
+    const rawPayload = JSON.stringify(req.capturedQuery) + JSON.stringify(req.capturedBody);
+
+    // Verifichiamo se il payload sembra sospetto (offuscamento, shell, comandi)
+    const isSuspicious = /powershell|base64|cmd\.exe|eval\(|exec\(|bash|sh\s-c/i.test(rawPayload);
+
+    if (isSuspicious) {
+        // Avviamo l'analisi in background per non bloccare la risposta all'attaccante
+        // Ma ci assicuriamo che req.threatIntel sia pronto prima del 'finish'
+        req.threatIntelPromise = AIService.analyzePayload(rawPayload)
+            .catch(err => ({ error: "Analisi IA fallita", details: err.message }));
+    }
+
     // 4. MONKEY PATCHING RISPOSTA
     if (!res.__honeyPatched) {
         res.__honeyPatched = true;
@@ -156,8 +175,15 @@ async function requestCaptureMiddleware(req, res, next) {
     }
 
     // 5. SALVATAGGIO ASINCRONO AL TERMINE
-    res.on('finish', () => {
+    res.on('finish', async () => {
         const duration = Date.now() - startTime;
+
+        // Recuperiamo l'analisi IA se disponibile
+        let threatIntel = null;
+        if (req.threatIntelPromise) {
+            threatIntel = await req.threatIntelPromise;
+        }
+
         logQueue.enqueue({
             timestamp: new Date().toISOString(),
             req: {
@@ -169,7 +195,8 @@ async function requestCaptureMiddleware(req, res, next) {
                 headers: req.capturedHeaders,
                 query: req.capturedQuery,
                 body: req.capturedBody,
-                fingerprint: req.fingerprint // Passo il fingerprint alla coda
+                fingerprint: req.fingerprint, // Passo il fingerprint alla coda
+                threatIntel: threatIntel
             },
             res: {
                 statusCode: res.statusCode,

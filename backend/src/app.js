@@ -5,7 +5,8 @@ const path = require('path');
 const honeypot = require('./honeypot');
 
 const { requestCaptureMiddleware } = require('./honeypot/middleware/honeyLogger'); // Importa qui
-const app = express();
+const fakeDashboard = require('./honeypot/endpoints/ai-fakedashboard'); // Verifica il percorso corretto
+app = express();
 
 // 1. PRIMO: Logger Globale (Cattura tutto: statici, 404, attacchi)
 
@@ -41,6 +42,9 @@ app.use((req, res, next) => {
 // Serve static files from React frontend
 const distPath = path.join(__dirname, '../../frontend/dist');
 app.use(express.static(distPath));
+
+// 1. La Trappola IA (Priorità alta, nessuna protezione)
+app.use('/api/v1', fakeDashboard);
 
 // Mount honeypot
 app.use('/', honeypot);

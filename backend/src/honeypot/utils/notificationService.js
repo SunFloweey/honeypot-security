@@ -5,14 +5,19 @@ class NotificationService extends EventEmitter {
         super();
         this.clients = new Set();
 
-        // Heartbeat per mantenere vive le connessioni SSE
-        setInterval(() => this.sendHeartbeat(), 30000);
+        // Heartbeat per mantenere vive le connessioni SSE (ridotto a 15s per stabilità proxy)
+        setInterval(() => this.sendHeartbeat(), 15000);
     }
 
     sendHeartbeat() {
         if (this.clients.size === 0) return;
         this.clients.forEach(client => {
-            client.write(': heartbeat\n\n');
+            try {
+                client.write(': heartbeat\n\n');
+            } catch (err) {
+                console.warn('⚠️ [NotificationService] Failed to send heartbeat, removing stale client');
+                this.removeClient(client);
+            }
         });
     }
 
@@ -70,6 +75,40 @@ class NotificationService extends EventEmitter {
         });
 
         console.log(`🚨 [NotificationService] Sent alert to ${this.clients.size} admins: Risk ${alertData.riskScore} from ${alertData.ipAddress}`);
+    }
+
+    /**
+     * Notifica i client di attività nel terminale virtuale
+     */
+    notifyTerminalActivity(sessionKey, command) {
+        if (this.clients.size === 0) return;
+
+        const eventData = JSON.stringify({
+            timestamp: new Date().toISOString(),
+            type: 'TERMINAL_ACTIVITY',
+            sessionKey,
+            command: command.substring(0, 50) + (command.length > 50 ? '...' : '')
+        });
+
+        const message = `data: ${eventData}\n\n`;
+        this.clients.forEach(client => client.write(message));
+    }
+
+    /**
+     * Broadcasts AI-synthesized threat analysis to all connected dashboards
+     */
+    notifyThreatAnalysis(analysisData) {
+        if (this.clients.size === 0 || !analysisData) return;
+
+        const eventData = JSON.stringify({
+            timestamp: new Date().toISOString(),
+            type: 'THREAT_SYNTHESIS',
+            ...analysisData
+        });
+
+        const message = `data: ${eventData}\n\n`;
+        this.clients.forEach(client => client.write(message));
+        console.log(`📡 [NotificationService] Broadcasted Threat Synthesis: ${analysisData.intent}`);
     }
 }
 

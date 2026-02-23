@@ -1,6 +1,5 @@
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/database');
-const Session = require('./Session');
 
 const Log = sequelize.define('Log', {
     id: {
@@ -10,11 +9,7 @@ const Log = sequelize.define('Log', {
     },
     sessionKey: {
         type: DataTypes.STRING(32),
-        field: 'session_key',
-        references: {
-            model: Session,
-            key: 'session_key'
-        }
+        field: 'session_key'
     },
     timestamp: {
         type: DataTypes.DATE,
@@ -78,13 +73,15 @@ const Log = sequelize.define('Log', {
     indexes: [
         { fields: ['session_key'] },
         { fields: ['timestamp'] },
-        { fields: ['ip_address'] }
+        { fields: ['ip_address'] },
+        { fields: ['risk_score'] },
+        { fields: ['fingerprint'] }
     ]
 });
 
-// Associations
-Log.belongsTo(Session, { foreignKey: 'sessionKey', targetKey: 'sessionKey' });
-Session.hasMany(Log, { foreignKey: 'sessionKey', sourceKey: 'sessionKey' });
+Log.associate = (models) => {
+    Log.belongsTo(models.Session, { foreignKey: 'sessionKey', targetKey: 'sessionKey' });
+    Log.hasMany(models.Classification, { foreignKey: 'logId' });
+};
 
 module.exports = Log;
-

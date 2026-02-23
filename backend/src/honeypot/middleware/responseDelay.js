@@ -8,9 +8,20 @@ const STATIC_EXTENSIONS = new Set([
 const storageAdapter = require('../utils/storageAdapter');
 
 /**
- * Simula latenza realistica per rendere l'honeypot credibile
+ * Simula latenza realistica per rendere l'honeypot credibile.
+ * Salta il delay per le richieste amministrative della dashboard.
  */
 function responseDelayMiddleware(req, res, next) {
+    const isAdminApi = req.path.startsWith('/api/overview') ||
+        req.path.startsWith('/api/logs') ||
+        req.path.startsWith('/api/stream') ||
+        req.path.startsWith('/api/ai') ||
+        req.path.startsWith('/api/db-check');
+
+    if (isAdminApi) {
+        return next();
+    }
+
     const delay = calculateRealisticDelay(req);
     setTimeout(() => next(), delay);
 }
@@ -51,6 +62,15 @@ function calculateRealisticDelay(req) {
  * Middleware opzionale: rallenta attaccanti aggressivi
  */
 async function adaptiveDelayMiddleware(req, res, next) {
+    const isAdminApi = req.path.startsWith('/api/overview') ||
+        req.path.startsWith('/api/logs') ||
+        req.path.startsWith('/api/stream') ||
+        req.path.startsWith('/api/ai');
+
+    if (isAdminApi) {
+        return next();
+    }
+
     const ip = req.ip || '127.0.0.1';
     const TRACKING_WINDOW = 120000; // 2 minutes
 
