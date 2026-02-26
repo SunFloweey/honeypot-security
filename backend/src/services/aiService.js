@@ -201,6 +201,7 @@ class AIService {
     }
 
     static deceptionCache = new Map();
+    static MAX_CACHE_SIZE = 1000;
 
     static async getDeceptiveResponse(req) {
         const { method, path, query, body } = req;
@@ -218,7 +219,14 @@ class AIService {
             const prompt = prompts.ADAPTIVE_DECEPTION(method, path, query, body);
             const fakeData = await this._generateContent(prompt);
 
-            // 3. Salviamo nella memoria dell'inganno
+            // 3. Gestione cache con limite per prevenire memory leak
+            if (this.deceptionCache.size >= this.MAX_CACHE_SIZE) {
+                console.warn('[AI-CACHE] Cache size limit reached. Clearing oldest entries.');
+                // Semplice svuotamento per ora, o potremmo implementare LRU
+                const firstKey = this.deceptionCache.keys().next().value;
+                this.deceptionCache.delete(firstKey);
+            }
+            
             this.deceptionCache.set(requestSignature, fakeData);
 
             return fakeData;

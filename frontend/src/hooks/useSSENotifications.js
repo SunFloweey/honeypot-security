@@ -111,8 +111,14 @@ export const useSSENotifications = (onLogBatch, onSSEStatusChange) => {
 
         try {
             console.log("📡 Richiesta ticket SSE...");
+
+            // Determina quale header usare per il ticket
+            const headers = localStorage.getItem('saasToken')
+                ? { 'Authorization': `Bearer ${token}` }
+                : { 'x-admin-token': token };
+
             const response = await fetch('/api/stream-ticket', {
-                headers: { 'x-admin-token': token }
+                headers
             });
 
             if (!response.ok) throw new Error(`Ticket HTTP error: ${response.status}`);

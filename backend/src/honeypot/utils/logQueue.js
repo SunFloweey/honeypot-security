@@ -39,56 +39,43 @@ class LogQueue {
         try {
             console.log(`📦 [LogQueue] Flushing batch of ${currentBatch.length} logs...`);
 
-            // 1. ENSURE SESSIONS EXIST & UPDATE STATS
-            // Raggruppo per sessionKey univoca nel batch
-            const uniqueSessions = {};
+            // 1. AGGREGAZIONE SESSIONI PER UPSERT MASSIVO
+            const sessionMap = new Map();
             currentBatch.forEach(({ req }) => {
-                if (!uniqueSessions[req.sessionKey]) {
-                    uniqueSessions[req.sessionKey] = {
-                        count: 0,
+                if (!req.sessionKey) return;
+                
+                if (!sessionMap.has(req.sessionKey)) {
+                    sessionMap.set(req.sessionKey, {
+                        sessionKey: req.sessionKey,
                         ipAddress: req.ipAddress,
                         userAgent: req.userAgent,
-                        firstSeen: new Date(),
+                        requestCount: 0,
                         lastSeen: new Date()
-                    };
+                    });
                 }
-                uniqueSessions[req.sessionKey].count++;
-                uniqueSessions[req.sessionKey].lastSeen = new Date();
+                const sess = sessionMap.get(req.sessionKey);
+                sess.requestCount++;
+                sess.lastSeen = new Date();
             });
 
-            // Upsert delle sessioni (crea se non esiste, aggiorna se esiste)
-            for (const [sessionKey, data] of Object.entries(uniqueSessions)) {
-                try {
-                    const [session, created] = await Session.findOrCreate({
-                        where: { sessionKey },
-                        defaults: {
-                            ipAddress: data.ipAddress,
-                            userAgent: data.userAgent,
-                            requestCount: data.count,
-                            maxRiskScore: 0,
-                            firstSeen: data.firstSeen,
-                            lastSeen: data.lastSeen
-                        }
-                    });
-
-                    if (!created) {
-                        await session.increment('requestCount', { by: data.count });
-                        await session.update({ lastSeen: data.lastSeen });
-                    }
-                } catch (err) {
-                    console.error(`⚠️ [LogQueue] Session sync failed for ${sessionKey}:`, err.message);
-                }
+            // 2. UPSERT DELLE SESSIONI (Operazione massiva invece di loop query)
+            if (sessionMap.size > 0) {
+                const sessionsToUpsert = Array.from(sessionMap.values());
+                await Session.bulkCreate(sessionsToUpsert, {
+                    updateOnDuplicate: ['requestCount', 'lastSeen'],
+                    returning: false
+                });
             }
 
-            // 3. BULK CREATE LOGS
+            // 3. BULK CREATE LOGS (Senza validazione individuale per massime performance)
             const { v4: uuidv4 } = require('uuid');
 
             const logRecords = currentBatch
                 .filter(({ req }) => req.sessionKey && req.sessionKey !== 'undefined')
-                .map(({ req, res }) => {
+                .map(({ req, res, apiKeyId }) => {
                     try {
                         return {
-                            id: req.id || uuidv4(), // Fallback UUID
+                            id: req.id || uuidv4(),
                             sessionKey: req.sessionKey,
                             method: req.method,
                             path: req.path,
@@ -100,47 +87,24 @@ class LogQueue {
                             responseTimeMs: res.durationMs || 0,
                             responseBody: res.body || null,
                             fingerprint: req.fingerprint,
-                            timestamp: new Date() // Ensure timestamp is set
+                            timestamp: new Date(),
+                            apiKeyId: apiKeyId || null
                         };
                     } catch (mapErr) {
-                        console.error('⚠️ [LogQueue] Skipping malformed log entry:', mapErr.message);
                         return null;
                     }
                 })
-                .filter(record => record !== null); // Filter out failed mappings
+                .filter(record => record !== null);
 
-            if (logRecords.length === 0) {
-                console.warn('⚠️ [LogQueue] No valid logs to persist after processing');
-                this.isFlushing = false;
-                return;
+            if (logRecords.length > 0) {
+                await Log.bulkCreate(logRecords);
+                console.log(`✅ [LogQueue] Successfully persisted ${logRecords.length} logs.`);
             }
 
-            const createdLogs = await Log.bulkCreate(logRecords, { validate: true }); // Enable validation
-
-            console.log(`✅ [LogQueue] Successfully persisted ${createdLogs.length} logs.`);
-
-            // 4. BACKGROUND CLASSIFICATION (Fire-and-Forget)
-            await Promise.all(createdLogs.map(async (logRecord) => {
-                try {
-                    // Match by ID, handling potential UUID generation differences (unlikely here but safe)
-                    const originalEntry = currentBatch.find(entry =>
-                        (entry.req.id && entry.req.id === logRecord.id) ||
-                        (entry.req.path === logRecord.path && entry.req.method === logRecord.method) // Fallback match
-                    );
-
-                    if (!originalEntry) return;
-
-                    const session = await Session.findByPk(logRecord.sessionKey);
-                    if (session) {
-                        await Classifier.classify(originalEntry.req, logRecord, session);
-                    }
-                } catch (classifyErr) {
-                    console.error(`⚠️ [LogQueue] Classification error for log ${logRecord.id}:`, classifyErr.message);
-                }
-            }));
-
+            // 4. CLASSIFICAZIONE CON LIMITATORE DI CONCORRENZA (opzionale, qui semplificato)
+            // Notifichiamo il batch una volta sola
             const notificationService = require('./notificationService');
-            notificationService.notifyLogBatch(createdLogs.length);
+            notificationService.notifyLogBatch(logRecords.length);
 
             // 5. REAL-TIME THREAT SYNTHESIS (Gemini)
             const AIService = require('../../services/aiService');

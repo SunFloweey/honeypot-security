@@ -15,10 +15,10 @@ async function bootstrap() {
         // 1. Database Connection
         await testConnection();
 
-        // Sync models (ensure tables exist)
-        console.log('⏳ Sincronizzazione modelli DB...');
-        await sequelize.sync();
-        console.log('✅ Modelli DB sincronizzati.');
+        // Sync models (ensure tables exist, add new columns/tables without dropping)
+        console.log('⏳ Sincronizzazione modelli DB (inclusi User, ApiKey per SaaS)...');
+        await sequelize.sync({ alter: true });
+        console.log('✅ Modelli DB sincronizzati (SaaS ready).');
 
         // Hydrate ThreatCache (State Continuity)
         await threatCache.hydrate();

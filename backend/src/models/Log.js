@@ -66,6 +66,12 @@ const Log = sequelize.define('Log', {
         type: DataTypes.STRING(64),
         field: 'local_ip',
         allowNull: true
+    },
+    apiKeyId: {
+        type: DataTypes.UUID,
+        field: 'api_key_id',
+        allowNull: true,
+        references: { model: 'api_keys', key: 'id' }
     }
 }, {
     tableName: 'logs',
@@ -81,7 +87,8 @@ const Log = sequelize.define('Log', {
 
 Log.associate = (models) => {
     Log.belongsTo(models.Session, { foreignKey: 'sessionKey', targetKey: 'sessionKey' });
-    Log.hasMany(models.Classification, { foreignKey: 'logId' });
+    Log.hasMany(models.Classification, { foreignKey: 'logId', as: 'Classifications' });
+    Log.belongsTo(models.ApiKey, { foreignKey: 'apiKeyId', as: 'apiKey' });
 };
 
 module.exports = Log;

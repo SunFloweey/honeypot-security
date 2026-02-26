@@ -1,13 +1,33 @@
 const express = require('express');
 const { sequelize, testConnection } = require('../../config/database');
 const { Op, fn, col, literal } = require('sequelize'); // Aggiunto literal per comodità
-const Log = require('../../models/Log');
-const Session = require('../../models/Session');
-const Classification = require('../../models/Classification');
+const { Log, Session, ApiKey, Classification } = require('../../models');
 const notificationService = require('../utils/notificationService');
 const ticketService = require('../utils/ticketService');
 
 const router = express.Router();
+
+/**
+ * Helper: Crea filtro where per isolamento tenant
+ */
+async function getTenantFilter(req) {
+    if (req.user && req.user.isGlobal) return {}; // Super-admin vede tutto
+
+    if (req.user && req.user.userId) {
+        // Trova tutte le chiavi API dell'utente
+        const userKeys = await ApiKey.findAll({
+            where: { userId: req.user.userId },
+            attributes: ['id']
+        });
+        const keyIds = userKeys.map(k => k.id);
+
+        return {
+            apiKeyId: { [Op.in]: keyIds }
+        };
+    }
+
+    return { apiKeyId: '00000000-0000-0000-0000-000000000000' }; // Nessun log se non autenticato correttamente
+}
 
 // ==========================================
 // REAL-TIME NOTIFICATIONS (SSE)
@@ -43,12 +63,12 @@ router.get('/stream', (req, res) => {
     // Aggiungi client
     notificationService.addClient(res);
 
-    // Heartbeat forzata immediata per confermare il link al proxy
+    // Heartbeat forzata più frequente (30s) per evitare timeout browser (solitamente 45s)
     const heartbeatTimer = setInterval(() => {
         if (!res.writableEnded) {
             res.write(': keepalive\n\n');
         }
-    }, 45000); // Heartbeat di backup ogni 45s oltre a quello del Service
+    }, 30000);
 
     // Gestione disconnessione
     req.on('close', () => {
@@ -101,6 +121,12 @@ router.get('/overview', async (req, res) => {
         }
 
         const dateRangeClause = { [Op.between]: [startTime, endTime] };
+        const tenantClause = await getTenantFilter(req);
+
+        const combinedWhere = {
+            ...tenantClause,
+            timestamp: dateRangeClause
+        };
 
         // 1. Parallel execution of all dashboard queries to reduce latency
         const [
@@ -112,11 +138,13 @@ router.get('/overview', async (req, res) => {
             topFingerprints
         ] = await Promise.all([
             // Query 1: Total requests
-            Log.count({ where: { timestamp: dateRangeClause } }),
+            Log.count({ where: combinedWhere }),
 
             // Query 2: Unique sessions seen in period
-            Session.count({
-                where: { lastSeen: dateRangeClause }
+            Log.count({
+                distinct: true,
+                col: 'session_key',
+                where: combinedWhere
             }),
 
             // Query 3: Attack Distribution (Joined with Classifications)
@@ -125,9 +153,10 @@ router.get('/overview', async (req, res) => {
                     [sequelize.col('Classifications.category'), 'category'],
                     [sequelize.fn('COUNT', sequelize.col('Log.id')), 'count']
                 ],
-                where: { timestamp: dateRangeClause },
+                where: combinedWhere,
                 include: [{
                     model: Classification,
+                    as: 'Classifications',
                     attributes: [],
                     required: true
                 }],
@@ -139,12 +168,12 @@ router.get('/overview', async (req, res) => {
             Log.findAll({
                 attributes: [
                     'ipAddress',
-                    [fn('COUNT', col('Log.id')), 'count'],
-                    [fn('SUM', col('Log.risk_score')), 'totalRiskScore']
+                    [fn('COUNT', col('id')), 'count'],
+                    [fn('SUM', col('risk_score')), 'totalRiskScore']
                 ],
-                where: { timestamp: dateRangeClause },
-                group: ['ipAddress'],
-                order: [[fn('SUM', col('Log.risk_score')), 'DESC']],
+                where: combinedWhere,
+                group: ['ip_address'],
+                order: [[fn('SUM', col('risk_score')), 'DESC']],
                 limit: 5,
                 raw: true
             }),
@@ -155,7 +184,7 @@ router.get('/overview', async (req, res) => {
                     [fn('date_trunc', isSingleDay ? 'minute' : 'hour', col('timestamp')), 'time_bucket'],
                     [fn('COUNT', col('id')), 'count']
                 ],
-                where: { timestamp: dateRangeClause },
+                where: combinedWhere,
                 group: [fn('date_trunc', isSingleDay ? 'minute' : 'hour', col('timestamp'))],
                 order: [[fn('date_trunc', isSingleDay ? 'minute' : 'hour', col('timestamp')), 'ASC']],
                 raw: true
@@ -166,11 +195,11 @@ router.get('/overview', async (req, res) => {
                 attributes: [
                     'fingerprint',
                     [fn('COUNT', fn('DISTINCT', col('ip_address'))), 'uniqueIPs'],
-                    [fn('COUNT', col('Log.id')), 'totalRequests'],
-                    [fn('MAX', col('Log.timestamp')), 'lastSeen']
+                    [fn('COUNT', col('id')), 'totalRequests'],
+                    [fn('MAX', col('timestamp')), 'lastSeen']
                 ],
                 where: {
-                    timestamp: dateRangeClause,
+                    ...combinedWhere,
                     fingerprint: { [Op.ne]: null }
                 },
                 group: ['fingerprint'],
@@ -228,7 +257,12 @@ router.get('/logs', async (req, res) => {
 
         console.log(`🔍 Logs Request: limit=${limit}, risk_min=${risk_min}, category=${category}, order=${sortDirection}`);
 
-        const whereClause = {};
+        const tenantClause = await getTenantFilter(req);
+
+        const whereClause = {
+            ...tenantClause
+        };
+
         // --- LOGICA FILTRO TEMPORALE (Modificata) ---
         // Se c'è una data specifica nel calendario, ha la priorità
         if (req.query.date && req.query.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
@@ -261,11 +295,19 @@ router.get('/logs', async (req, res) => {
 
         // Include Classifications sempre con LEFT JOIN
         // Se c'è un filtro per categoria, filtra sulle classifications
-        const includeClause = [{
-            model: Classification,
-            required: false, // LEFT JOIN - include anche logs senza classificazioni
-            ...(category && { where: { category } })
-        }];
+        const includeClause = [
+            {
+                model: Classification,
+                as: 'Classifications',
+                required: false, // LEFT JOIN - include anche logs senza classificazioni
+                ...(category && { where: { category } })
+            },
+            {
+                model: ApiKey,
+                as: 'apiKey',
+                attributes: ['name', 'key']
+            }
+        ];
 
         const logs = await Log.findAndCountAll({
             where: whereClause,
@@ -361,7 +403,11 @@ router.get('/timeseries', async (req, res) => {
         const startTime = new Date(Date.now() - hours * 60 * 60 * 1000);
         const bucketSize = 600; // 10 minuti in secondi
 
-        const whereClause = { timestamp: { [Op.gte]: startTime } };
+        const tenantClause = await getTenantFilter(req);
+        const whereClause = {
+            ...tenantClause,
+            timestamp: { [Op.gte]: startTime }
+        };
         const includeClause = [];
 
         if (category) {
@@ -384,7 +430,7 @@ router.get('/timeseries', async (req, res) => {
                         fn('*',
                             fn('FLOOR',
                                 fn('/',
-                                    fn('EXTRACT', fn('EPOCH', col('Log.timestamp'))),
+                                    fn('EXTRACT', fn('EPOCH', col('timestamp'))),
                                     bucketSize
                                 )
                             ),
@@ -393,7 +439,7 @@ router.get('/timeseries', async (req, res) => {
                     ),
                     'time_bucket'
                 ],
-                [fn('COUNT', col('Log.id')), 'count']
+                [fn('COUNT', col('id')), 'count']
             ],
             where: whereClause,
             include: includeClause,

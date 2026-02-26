@@ -88,6 +88,7 @@ const RecentLogsTable = ({ logs, totalLogs, currentPage, onPageChange, onInvesti
                             >
                                 Timestamp {order === 'DESC' ? '▼' : '▲'}
                             </th>
+                            <th>Project</th>
                             <th>Method</th>
                             <th>Path</th>
                             <th>Attacker IP (VPN/Proxy)</th>
@@ -98,7 +99,7 @@ const RecentLogsTable = ({ logs, totalLogs, currentPage, onPageChange, onInvesti
                         </tr>
                     </thead>
                     <tbody>
-                        {topSpacer > 0 && <tr><td colSpan="8" style={{ height: `${topSpacer}px` }}></td></tr>}
+                        {topSpacer > 0 && <tr><td colSpan="9" style={{ height: `${topSpacer}px` }}></td></tr>}
                         {logs.slice(startIndex, endIndex).map(log => {
                             const isLeaked = !!log.leakedIp;
                             const riskLevel = log.riskScore || 0;
@@ -108,9 +109,12 @@ const RecentLogsTable = ({ logs, totalLogs, currentPage, onPageChange, onInvesti
                                     borderBottom: '1px solid var(--researcher-border)',
                                     backgroundColor: isLeaked ? 'rgba(239, 68, 68, 0.05)' : 'transparent'
                                 }}>
-                                    <td>{new Date(log.timestamp).toLocaleString()}</td>
+                                    <td style={{ color: '#e2e8f0' }}>{new Date(log.timestamp).toLocaleString()}</td>
+                                    <td style={{ color: '#10b981', fontSize: '0.75rem' }}>
+                                        {log.apiKey ? log.apiKey.name : <span className="text-muted">Internal</span>}
+                                    </td>
                                     <td style={{ color: '#fbbf24', fontWeight: 'bold' }}>{sanitizeHTML(log.method)}</td>
-                                    <td className="monospace" title={log.path}>
+                                    <td className="monospace" title={log.path} style={{ color: '#60a5fa' }}>
                                         {sanitizeHTML(log.path?.substring(0, 20))}{log.path?.length > 20 ? '...' : ''}
                                     </td>
                                     <td>
@@ -155,10 +159,10 @@ const RecentLogsTable = ({ logs, totalLogs, currentPage, onPageChange, onInvesti
                                 </tr>
                             );
                         })}
-                        {bottomSpacer > 0 && <tr><td colSpan="8" style={{ height: `${bottomSpacer}px` }}></td></tr>}
+                        {bottomSpacer > 0 && <tr><td colSpan="9" style={{ height: `${bottomSpacer}px` }}></td></tr>}
                         {logs.length === 0 && (
                             <tr>
-                                <td colSpan="8" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                                <td colSpan="9" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
                                     No logs matching the current filters.
                                 </td>
                             </tr>

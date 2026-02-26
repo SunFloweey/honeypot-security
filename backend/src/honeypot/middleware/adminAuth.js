@@ -49,8 +49,11 @@ const adminRateLimiter = rateLimit({
     }
 });
 
+const jwt = require('jsonwebtoken');
+
 function adminAuthMiddleware(req, res, next) {
     const headerToken = req.headers['x-admin-token'];
+    const bearerToken = req.headers.authorization;
     const queryToken = req.query.token;
 
     // 1. Check for Security Ticket (High Priority for SSE)
@@ -61,15 +64,32 @@ function adminAuthMiddleware(req, res, next) {
         }
     }
 
-    // 2. Standard Token Validation
+    // 2. Check for SaaS JWT
+    if (bearerToken && bearerToken.startsWith('Bearer ')) {
+        const token = bearerToken.split(' ')[1];
+        try {
+            const decoded = jwt.verify(token, process.env.JWT_SECRET || process.env.ADMIN_TOKEN);
+            req.user = decoded; // Attach user info (userId, email, role)
+            return next();
+        } catch (err) {
+            console.warn(`[SECURITY] Invalid SaaS JWT from ${req.ip}:`, err.message);
+            // Fallthrough to admin token if JWT fails? No, better 401 if they sent a Bearer header
+            return res.status(401).json({ error: 'Unauthorized: Token non valido' });
+        }
+    }
+
+    // 3. Standard Token Validation (Legacy Admin Mode)
     const token = headerToken || queryToken;
 
     if (!AuthHelper.isTokenValid(token, ADMIN_TOKEN)) {
-        console.warn(`[SECURITY] Unauthorized access attempt: Invalid or missing token from ${req.ip} for ${req.originalUrl}`);
+        console.warn(`[SECURITY] Unauthorized access attempt: Invalid or missing token/JWT from ${req.ip} for ${req.originalUrl}`);
         return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // 3. Security Audit: Warn if ADMIN_TOKEN is used in Query Param for non-stream routes
+    // 4. Global Admin Context (Full Access)
+    req.user = { role: 'admin', isGlobal: true };
+
+    // Security Audit: Warn if ADMIN_TOKEN is used in Query Param for non-stream routes
     if (queryToken && !req.path.includes('/stream')) {
         console.warn(`⚠️ [SECURITY WARNING] ADMIN_TOKEN exposed in URL query parameters from ${req.ip}. Update frontend to use Headers.`);
     }

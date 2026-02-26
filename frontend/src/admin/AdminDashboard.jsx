@@ -15,6 +15,8 @@ import ToastNotification from './components/ToastNotification';
 import PayloadAnalyzer from './components/PayloadAnalyzer';
 import HoneytokenMonitor from './components/HoneytokenMonitor';
 import TerminalMonitor from './components/TerminalMonitor';
+import ApiKeyManager from './components/ApiKeyManager';
+import TenantManager from './components/TenantManager';
 
 const AdminDashboard = () => {
     // Auth
@@ -22,6 +24,7 @@ const AdminDashboard = () => {
 
     // UI State
     const [selectedLog, setSelectedLog] = useState(null);
+    const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
     const [riskFilter, setRiskFilter] = useState(0);
     const [ipFilter, setIpFilter] = useState(''); // Filtro IP
     const [fingerprintFilter, setFingerprintFilter] = useState(''); // Nuovo filtro Fingerprint
@@ -93,10 +96,21 @@ const AdminDashboard = () => {
     }
 
     return (
-        <div className="dashboard-layout">
+        <div className={`dashboard-layout ${mobileSidebarOpen ? 'mobile-sidebar-open' : ''}`}>
+            {/* Sidebar Overlay for Mobile */}
+            <div className="sidebar-overlay" onClick={() => setMobileSidebarOpen(false)}></div>
+
+            {/* Mobile Toggle Button */}
+            <button
+                className="sidebar-mobile-toggle"
+                onClick={() => setMobileSidebarOpen(true)}
+            >
+                ☰ MENU
+            </button>
+
             <DashboardSidebar
                 view={view}
-                setView={setView}
+                setView={(v) => { setView(v); setMobileSidebarOpen(false); }}
                 refreshData={() => fetchData(true)}
                 riskFilter={riskFilter}
                 setRiskFilter={setRiskFilter}
@@ -111,6 +125,7 @@ const AdminDashboard = () => {
                 isAudioUnlocked={isAudioUnlocked}
                 unlockAudio={unlockAudio}
                 sseStatus={sseStatus}
+                onCloseMobile={() => setMobileSidebarOpen(false)}
             />
 
             <main className="dashboard-main">
@@ -173,6 +188,14 @@ const AdminDashboard = () => {
 
                 {view === 'terminal' && (
                     <TerminalMonitor />
+                )}
+
+                {view === 'api_keys' && (
+                    <ApiKeyManager />
+                )}
+
+                {view === 'tenants' && (
+                    <TenantManager />
                 )}
             </main>
 

@@ -4,6 +4,7 @@ const path = require('path');
 const logQueue = require('../utils/logQueue');
 const { generateSessionKey } = require('../utils/session');
 const AIService = require('../../services/aiService');
+const ApiKey = require('../../models/ApiKey');
 
 const STATIC_EXTENSIONS = new Set([
     '.css', '.js', '.jpg', '.jpeg', '.png', '.gif', '.ico', '.svg',
@@ -97,6 +98,21 @@ async function requestCaptureMiddleware(req, res, next) {
 
     // GENERAZIONE FINGERPRINT
     req.fingerprint = generateFingerprint(req);
+
+    // SaaS Multi-tenant Check
+    req.tenantKeyId = null;
+    const apiKey = req.headers['x-api-key'];
+    if (apiKey) {
+        try {
+            const keyRecord = await ApiKey.findOne({ where: { key: apiKey, isActive: true } });
+            if (keyRecord) {
+                req.tenantKeyId = keyRecord.id;
+                keyRecord.update({ lastUsedAt: new Date() }).catch(() => { });
+            }
+        } catch (err) {
+            // Silently fail auth check for decoys
+        }
+    }
 
     // Cookie-Based Session Tracking
     let sessionKey = null;
@@ -202,7 +218,8 @@ async function requestCaptureMiddleware(req, res, next) {
                 statusCode: res.statusCode,
                 durationMs: duration,
                 body: res.responseBody
-            }
+            },
+            apiKeyId: req.tenantKeyId
         });
     });
 

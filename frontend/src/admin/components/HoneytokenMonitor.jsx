@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Shield, Key, Database, Cloud, Lock, AlertTriangle, RefreshCw, Eye, EyeOff, Activity } from 'lucide-react';
+import { useAdminAuth } from '../../hooks/useAdminAuth';
 
 /**
  * HoneytokenMonitor - Displays active honeytokens and usage alerts
@@ -10,6 +11,7 @@ import { Shield, Key, Database, Cloud, Lock, AlertTriangle, RefreshCw, Eye, EyeO
  * 3. Visual indicators for token categories
  */
 const HoneytokenMonitor = () => {
+    const { getToken } = useAdminAuth();
     const [summary, setSummary] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -28,10 +30,13 @@ const HoneytokenMonitor = () => {
     const fetchSummary = useCallback(async () => {
         try {
             setLoading(true);
+            const token = getToken();
+            const headers = localStorage.getItem('saasToken')
+                ? { 'Authorization': `Bearer ${token}` }
+                : { 'x-admin-token': token };
+
             const response = await fetch('/api/ai/honeytokens/summary', {
-                headers: {
-                    'x-admin-token': localStorage.getItem('adminToken'),
-                },
+                headers
             });
 
             if (!response.ok) throw new Error('Failed to fetch honeytoken summary');

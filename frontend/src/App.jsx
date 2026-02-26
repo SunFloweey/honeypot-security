@@ -7,6 +7,7 @@ import DecoyUpload from './decoy/DecoyUpload';
 import MaintenancePage from './decoy/MaintenancePage';
 import AdminDashboard from './admin/AdminDashboard';
 import RealAdminLogin from './admin/RealAdminLogin';
+import SaaSAuth from './admin/SaaSAuth'; // New SaaS Auth
 import { useWebRTCLeak } from './hooks/useWebRTCLeak';
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
         {/* Real Admin Dashboard (Analysis) */}
         <Route path="/real-dashboard" element={<AdminDashboard />} />
         <Route path="/researcher-login" element={<RealAdminLogin />} />
+        <Route path="/auth-portal" element={<SaaSAuth />} />
 
         {/* Decoy Routes */}
         <Route path="/" element={<DecoyHome />} />

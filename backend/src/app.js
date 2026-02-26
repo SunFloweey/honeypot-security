@@ -6,7 +6,7 @@ const honeypot = require('./honeypot');
 
 const { requestCaptureMiddleware } = require('./honeypot/middleware/honeyLogger'); // Importa qui
 const fakeDashboard = require('./honeypot/endpoints/ai-fakedashboard'); // Verifica il percorso corretto
-app = express();
+const app = express();
 
 // 1. PRIMO: Logger Globale (Cattura tutto: statici, 404, attacchi)
 

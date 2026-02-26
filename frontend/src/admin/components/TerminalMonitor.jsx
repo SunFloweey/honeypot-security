@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Terminal, Users, Clock, Hash, ChevronRight, Activity, Shield, AlertTriangle, Search, Trash2 } from 'lucide-react';
 import { sanitizeHTML } from '../../utils/sanitizer';
+import { useAdminAuth } from '../../hooks/useAdminAuth';
 
 const TerminalMonitor = () => {
+    const { getToken } = useAdminAuth();
     const [sessions, setSessions] = useState([]);
     const [selectedSession, setSelectedSession] = useState(null);
     const [forensics, setForensics] = useState(null);
@@ -11,8 +13,13 @@ const TerminalMonitor = () => {
 
     const fetchSessions = async () => {
         try {
+            const token = getToken();
+            const headers = localStorage.getItem('saasToken')
+                ? { 'Authorization': `Bearer ${token}` }
+                : { 'x-admin-token': token };
+
             const response = await fetch('/admin/terminal/sessions', {
-                headers: { 'x-admin-token': localStorage.getItem('adminToken') }
+                headers
             });
             const data = await response.json();
             setSessions(data.activeSessions || []);
@@ -24,8 +31,13 @@ const TerminalMonitor = () => {
     const fetchForensics = async (key) => {
         setLoading(true);
         try {
+            const token = getToken();
+            const headers = localStorage.getItem('saasToken')
+                ? { 'Authorization': `Bearer ${token}` }
+                : { 'x-admin-token': token };
+
             const response = await fetch(`/admin/terminal/session/${key}`, {
-                headers: { 'x-admin-token': localStorage.getItem('adminToken') }
+                headers
             });
             const data = await response.json();
             setForensics(data);
