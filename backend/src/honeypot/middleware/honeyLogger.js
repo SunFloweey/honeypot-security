@@ -79,14 +79,17 @@ async function writeToFallbackLog(data) {
  * Middleware di cattura: Traccia richieste e risposte
  */
 async function requestCaptureMiddleware(req, res, next) {
-    // 1. SKIP VELOCE PER ASSET STATICI E RICHIESTE DASHBOARD
+    // 1. SKIP VELOCE PER ASSET STATICI E RICHIESTE DASHBOARD REALE
     const ext = path.extname(req.path).toLowerCase();
-    const isAdminApi = req.path.startsWith('/api/overview') ||
+    
+    // Escludiamo solo la dashboard REALE (admin), non quella FAKE (ai-fakedashboard)
+    const isRealAdminApi = req.path.startsWith('/api/overview') ||
         req.path.startsWith('/api/logs') ||
         req.path.startsWith('/api/stream') ||
-        req.path.startsWith('/api/ai');
+        req.path.startsWith('/api/ai') ||
+        req.path.startsWith('/api/admin');
 
-    if (STATIC_EXTENSIONS.has(ext) || req.path.startsWith('/assets/') || isAdminApi) {
+    if (STATIC_EXTENSIONS.has(ext) || req.path.startsWith('/assets/') || isRealAdminApi) {
         return next();
     }
 
@@ -101,13 +104,19 @@ async function requestCaptureMiddleware(req, res, next) {
 
     // SaaS Multi-tenant Check
     req.tenantKeyId = null;
+    req.tenantUserId = null; // AGGIUNTO: ID dell'utente proprietario
     const apiKey = req.headers['x-api-key'];
     if (apiKey) {
         try {
-            const keyRecord = await ApiKey.findOne({ where: { key: apiKey, isActive: true } });
+            const keyRecord = await ApiKey.findOne({ 
+                where: { key: apiKey, isActive: true },
+                attributes: ['id', 'userId'] 
+            });
             if (keyRecord) {
                 req.tenantKeyId = keyRecord.id;
+                req.tenantUserId = keyRecord.userId; // Carichiamo l'utente
                 keyRecord.update({ lastUsedAt: new Date() }).catch(() => { });
+                console.log(`🔑 [HoneyLogger] Request authenticated for Tenant User: ${req.tenantUserId}`);
             }
         } catch (err) {
             // Silently fail auth check for decoys

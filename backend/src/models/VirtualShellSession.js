@@ -33,6 +33,14 @@ const VirtualShellSession = sequelize.define('VirtualShellSession', {
     lastActivity: {
         type: DataTypes.DATE,
         defaultValue: DataTypes.NOW
+    },
+    userId: {
+        type: DataTypes.UUID,
+        allowNull: true // Null for global admin tests or unmapped attacks
+    },
+    apiKeyId: {
+        type: DataTypes.UUID,
+        allowNull: true // Links the session to a specific tenant's honeypot
     }
 }, {
     tableName: 'virtual_shell_sessions',

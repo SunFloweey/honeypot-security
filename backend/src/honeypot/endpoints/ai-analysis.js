@@ -5,34 +5,54 @@ const Log = require('../../models/Log');
 const AIService = require('../../services/aiService');
 const HoneytokenService = require('../../services/honeytokenService');
 
+const { adminAuthMiddleware } = require('../middleware/adminAuth');
+const { ApiKey } = require('../../models');
+const { Op } = require('sequelize');
+
+// Apply auth to all routes
+router.use(adminAuthMiddleware);
+
+/**
+ * Helper: Crea filtro where per isolamento tenant (condiviso con dashboard.js)
+ */
+async function getTenantFilter(req) {
+    if (req.user && req.user.isGlobal) return {};
+    if (req.user && req.user.userId) {
+        const userKeys = await ApiKey.findAll({
+            where: { userId: req.user.userId },
+            attributes: ['id']
+        });
+        return { apiKeyId: { [Op.in]: userKeys.map(k => k.id) } };
+    }
+    return { apiKeyId: '00000000-0000-0000-0000-000000000000' };
+}
+
 // ==========================================
-// SESSION ANALYSIS (existing)
+// SESSION ANALYSIS (Deep Forensic)
 // ==========================================
 router.post('/session', async (req, res) => {
     try {
         const { sessionKey } = req.body;
+        if (!sessionKey) return res.status(400).json({ error: 'Session Key is required' });
 
-        // Validazione Proattiva
-        if (!sessionKey) {
-            return res.status(400).json({ error: 'Session Key is required' });
-        }
+        const tenantClause = await getTenantFilter(req);
 
         const session = await Session.findOne({
             where: { sessionKey },
             include: [{
                 model: Log,
+                where: tenantClause, // FILTRO TENANT: Analizza solo i log che appartengono al cliente
+                required: true,
                 attributes: ['method', 'path', 'timestamp', 'statusCode', 'body', 'queryParams', 'leakedIp', 'localIp'],
                 order: [['timestamp', 'ASC']]
             }]
         });
 
         if (!session) {
-            return res.status(404).json({ error: 'Session not found' });
+            return res.status(404).json({ error: 'Session not found or access denied' });
         }
 
-        // Chiamata al Service - Logica isolata
         const analysis = await AIService.analyzeSession(session);
-
         return res.json(analysis);
 
     } catch (error) {
@@ -105,7 +125,8 @@ router.post('/decode-payload', async (req, res) => {
  */
 router.get('/honeytokens/summary', async (req, res) => {
     try {
-        const summary = await HoneytokenService.getTokenSummary();
+        const filter = req.user.isGlobal ? {} : { userId: req.user.userId };
+        const summary = await HoneytokenService.getTokenSummary(filter);
         res.json(summary);
     } catch (error) {
         console.error('❌ Honeytoken Summary Error:', error);

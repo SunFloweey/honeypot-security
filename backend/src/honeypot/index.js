@@ -3,6 +3,7 @@ const express = require('express');
 const { requestCaptureMiddleware: honeyLoggerMiddleware } = require('./middleware/honeyLogger');
 const { responseDelayMiddleware, adaptiveDelayMiddleware } = require('./middleware/responseDelay');
 const { adaptiveDecoyMiddleware } = require('./middleware/adaptiveDecoy');
+const { isolationMiddleware } = require('./middleware/securityEnforcement');
 
 // Import endpoint routers
 const authEndpoints = require('./endpoints/auth');
@@ -43,6 +44,9 @@ router.use(adaptiveDelayMiddleware);
 
 // 3. Detect OS command injection in ANY request parameter
 router.use(commandInjectionCatcher);
+
+// 4. Force Isolation/Deception for high-risk sessions
+router.use(isolationMiddleware);
 
 // ==========================================
 // MOUNT ENDPOINT GROUPS

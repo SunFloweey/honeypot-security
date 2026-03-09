@@ -1,116 +1,130 @@
 const EventEmitter = require('events');
+const axios = require('axios');
 
 class NotificationService extends EventEmitter {
     constructor() {
         super();
-        this.clients = new Set();
+        this.clients = new Map(); // Use Map to store metadata along with res
+        this.isAdminServer = process.env.ADMIN_PORT && process.env.PORT == process.env.ADMIN_PORT;
 
-        // Heartbeat per mantenere vive le connessioni SSE (ridotto a 15s per stabilità proxy)
-        setInterval(() => this.sendHeartbeat(), 15000);
+        // Admin URL for forwarding (Using Docker Service Name)
+        this.adminNotifyUrl = `http://admin:${process.env.ADMIN_PORT || 4003}/api/internal/notify`;
+
+        // Heartbeat only on Admin Server
+        if (this.isAdminServer) {
+            setInterval(() => this.sendHeartbeat(), 15000);
+        }
+    }
+
+    /**
+     * Internal method to broadcast or forward events
+     * @param {string} type - Event type
+     * @param {Object} data - Event data (can include targetUserId or targetTenantId for filtering)
+     */
+    async _handleEvent(type, data) {
+        const payload = {
+            timestamp: new Date().toISOString(),
+            type,
+            ...data
+        };
+
+        const targetUserId = data.targetUserId;
+        const targetTenantId = data.targetTenantId; // Future use
+
+        // 1. If we are the Admin Server, broadcast to connected SSE clients
+        if (this.clients.size > 0) {
+            let sentCount = 0;
+            const message = `data: ${JSON.stringify(payload)}\n\n`;
+            
+            this.clients.forEach((metadata, client) => {
+                // FILTERING LOGIC:
+                // - Global Admin sees EVERYTHING
+                // - User only sees events targeted to them
+                // - If no target is specified, it might be a system-wide event (rare)
+                const isAuthorized = metadata.isGlobal || 
+                                   (targetUserId && metadata.userId === targetUserId);
+
+                if (isAuthorized) {
+                    try {
+                        client.write(message);
+                        sentCount++;
+                    } catch (e) {
+                        console.error(`❌ [NotificationService] Failed to write to client, removing...`);
+                        this.removeClient(client);
+                    }
+                }
+            });
+
+            if (sentCount > 0) {
+                console.log(`📡 [NotificationService] Sent ${type} to ${sentCount} authorized clients`);
+            }
+        } else if (this.isAdminServer) {
+            console.log(`📡 [NotificationService] Got ${type} but no clients connected.`);
+        }
+
+        // 2. If we are the Honeypot, forward to Admin Server via HTTP
+        if (!this.isAdminServer) {
+            console.log(`📡 [NotificationService] Forwarding ${type} to Admin Server...`);
+            try {
+                // Forward silently in background
+                axios.post(this.adminNotifyUrl, payload, {
+                    headers: {
+                        'x-internal-secret': process.env.ADMIN_TOKEN,
+                        'x-admin-token': process.env.ADMIN_TOKEN
+                    }
+                }).then(res => {
+                    console.log(`✅ [NotificationService] Forwarded ${type} successfully (Status: ${res.status})`);
+                }).catch(err => {
+                    console.error(`❌ [NotificationService] Failed to forward ${type}: ${err.message}`);
+                });
+            } catch (e) {
+                console.error(`❌ [NotificationService] Axios error: ${e.message}`);
+            }
+        }
     }
 
     sendHeartbeat() {
         if (this.clients.size === 0) return;
-        this.clients.forEach(client => {
+        this.clients.forEach((metadata, client) => {
             try {
                 client.write(': heartbeat\n\n');
             } catch (err) {
-                console.warn('⚠️ [NotificationService] Failed to send heartbeat, removing stale client');
                 this.removeClient(client);
             }
         });
     }
 
-    /**
-     * Aggiunge un client (response object) alla lista delle connessioni attive
-     */
-    addClient(res) {
-        this.clients.add(res);
-        console.log(`📡 [NotificationService] New client connected. Total: ${this.clients.size}`);
+    addClient(res, metadata = {}) {
+        this.clients.set(res, metadata);
+        console.log(`📡 [NotificationService] Admin client connected (User: ${metadata.userId || 'anon'}, Global: ${metadata.isGlobal}). Total: ${this.clients.size}`);
     }
 
-    /**
-     * Rimuove un client disconnesso
-     */
     removeClient(res) {
         this.clients.delete(res);
-        console.log(`🔕 [NotificationService] Client disconnected. Total: ${this.clients.size}`);
     }
 
-    /**
-     * Notifica i client che nuovi log sono stati salvati (Signal for Refresh)
-     * @param {number} count - Numero di log salvati
-     */
-    notifyLogBatch(count) {
-        if (this.clients.size === 0) return;
-
-        const eventData = JSON.stringify({
-            timestamp: new Date().toISOString(),
-            type: 'LOG_BATCH',
-            count: count
-        });
-
-        const message = `data: ${eventData}\n\n`;
-        this.clients.forEach(client => client.write(message));
+    notifyLogBatch(count, targetUserId = null) {
+        this._handleEvent('LOG_BATCH', { count, targetUserId });
     }
 
-    /**
-     * Invia un alert critico a tutti i client connessi
-     * @param {Object} alertData - Dati dell'alert (ip, sessionKey, riskScore, message)
-     */
     sendCriticalAlert(alertData) {
-        if (this.clients.size === 0) return;
-
-        const eventData = JSON.stringify({
-            timestamp: new Date().toISOString(),
-            type: 'CRITICAL_RISK',
-            ...alertData
-        });
-
-        // Formato standard SSE: "data: ... \n\n"
-        const message = `data: ${eventData}\n\n`;
-
-        this.clients.forEach(client => {
-            client.write(message);
-        });
-
-        console.log(`🚨 [NotificationService] Sent alert to ${this.clients.size} admins: Risk ${alertData.riskScore} from ${alertData.ipAddress}`);
+        // targetUserId can be extracted from alertData if present (from ApiKey link)
+        this._handleEvent('CRITICAL_RISK', alertData);
+        console.log(`🚨 [NotificationService] Alert: Risk ${alertData.riskScore} from ${alertData.ipAddress}`);
     }
 
-    /**
-     * Notifica i client di attività nel terminale virtuale
-     */
-    notifyTerminalActivity(sessionKey, command) {
-        if (this.clients.size === 0) return;
-
-        const eventData = JSON.stringify({
-            timestamp: new Date().toISOString(),
-            type: 'TERMINAL_ACTIVITY',
+    notifyTerminalActivity(sessionKey, command, targetUserId = null) {
+        this._handleEvent('TERMINAL_ACTIVITY', {
             sessionKey,
-            command: command.substring(0, 50) + (command.length > 50 ? '...' : '')
+            command: command.substring(0, 50) + (command.length > 50 ? '...' : ''),
+            targetUserId
         });
-
-        const message = `data: ${eventData}\n\n`;
-        this.clients.forEach(client => client.write(message));
     }
 
-    /**
-     * Broadcasts AI-synthesized threat analysis to all connected dashboards
-     */
-    notifyThreatAnalysis(analysisData) {
-        if (this.clients.size === 0 || !analysisData) return;
-
-        const eventData = JSON.stringify({
-            timestamp: new Date().toISOString(),
-            type: 'THREAT_SYNTHESIS',
-            ...analysisData
-        });
-
-        const message = `data: ${eventData}\n\n`;
-        this.clients.forEach(client => client.write(message));
-        console.log(`📡 [NotificationService] Broadcasted Threat Synthesis: ${analysisData.intent}`);
+    notifyThreatAnalysis(analysisData, targetUserId = null) {
+        if (!analysisData) return;
+        this._handleEvent('THREAT_SYNTHESIS', { ...analysisData, targetUserId });
     }
 }
 
-// Singleton instance
 module.exports = new NotificationService();

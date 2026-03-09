@@ -23,10 +23,20 @@ const Honeytoken = sequelize.define('Honeytoken', {
     metadata: {
         type: DataTypes.JSONB,
         defaultValue: {}
+    },
+    apiKeyId: {
+        type: DataTypes.UUID,
+        allowNull: true,
+        field: 'api_key_id',
+        references: { model: 'api_keys', key: 'id' }
     }
 }, {
     tableName: 'honeytokens',
     timestamps: true
 });
+
+Honeytoken.associate = (models) => {
+    Honeytoken.belongsTo(models.ApiKey, { foreignKey: 'apiKeyId', as: 'apiKey' });
+};
 
 module.exports = Honeytoken;

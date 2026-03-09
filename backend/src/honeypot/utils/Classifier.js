@@ -51,10 +51,30 @@ class Classifier {
             await ThreatRepository.saveClassifications(allClassifications);
             await ThreatRepository.updateSessionRisk(session, allClassifications);
 
-            // ✅ LA PARTE MANCANTE: Aggiorna fisicamente il log nel database
-            await logRecord.update({
-                riskScore: finalScore
-            });
+            // ✅ AGGIORNA FISICAMENTE IL LOG
+            const { Log, ApiKey } = require('../../models');
+            await Log.update({ riskScore: finalScore }, { where: { id: logRecord.id } });
+
+            // 🔔 REAL-TIME NOTIFICATION per rischi critici (> 70) o Honeytoken
+            if (finalScore >= 70 || honeytokenClassifications.length > 0) {
+                const notificationService = require('./notificationService');
+                
+                // Tenta di recuperare l'userId del tenant se il log è associato a un'apiKey
+                let targetUserId = null;
+                if (logRecord.apiKeyId) {
+                    const keyRecord = await ApiKey.findByPk(logRecord.apiKeyId);
+                    if (keyRecord) targetUserId = keyRecord.userId;
+                }
+
+                notificationService.sendCriticalAlert({
+                    logId: logRecord.id,
+                    riskScore: finalScore,
+                    ipAddress: logRecord.ipAddress,
+                    path: logRecord.path,
+                    category: allClassifications[0]?.category || 'high_risk',
+                    targetUserId: targetUserId // Fondamentale per StreetCats!
+                });
+            }
         }
 
         return allClassifications;

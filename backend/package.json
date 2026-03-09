@@ -9,7 +9,7 @@
     "start:both": "node server.js & node admin-server.js",
     "dev": "node scripts/kill-port.js 4002 && nodemon server.js",
     "dev:admin": "node scripts/kill-port.js 4003 && nodemon admin-server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest --testTimeout=10000 --detectOpenHandles --forceExit"
   },
   "keywords": [
     "honeypot",
@@ -25,6 +25,7 @@
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
+    "dockerode": "^4.0.9",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
@@ -36,12 +37,15 @@
     "pg-hstore": "^2.3.4",
     "redis": "^5.10.0",
     "sequelize": "^6.37.7",
+    "socket.io": "^4.8.3",
     "ua-parser-js": "^1.0.37",
     "winston": "^3.11.0"
   },
   "devDependencies": {
+    "jest": "^30.2.0",
     "nodemon": "^3.0.2",
-    "sequelize-cli": "^6.6.5"
+    "sequelize-cli": "^6.6.5",
+    "supertest": "^7.2.2"
   },
   "engines": {
     "node": ">=18.0.0"

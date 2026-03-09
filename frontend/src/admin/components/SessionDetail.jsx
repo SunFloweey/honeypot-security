@@ -2,23 +2,30 @@ import React, { useState } from 'react';
 import ThreatIntelCard from './ThreatIntelCard';
 import { ChevronRight, ShieldAlert, Cpu, Activity, Clock, Terminal, FastForward, Target } from 'lucide-react';
 import { sanitizeHTML } from '../../utils/sanitizer';
+import { useAdminAuth } from '../../hooks/useAdminAuth';
 
 const SessionDetail = ({ viewData, onBack, onSelectLog }) => {
     const [analysis, setAnalysis] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [expandedIntel, setExpandedIntel] = useState({});
+    const { getToken } = useAdminAuth();
 
     const handleAnalyze = async () => {
         setLoading(true);
         setError(null);
         try {
+            const token = getToken();
+            const isSaaS = !!localStorage.getItem('saasToken');
+            
+            const headers = {
+                'Content-Type': 'application/json',
+                ...(isSaaS ? { 'Authorization': `Bearer ${token}` } : { 'x-admin-token': token })
+            };
+
             const response = await fetch('/api/ai/session', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-admin-token': localStorage.getItem('adminToken')
-                },
+                headers,
                 body: JSON.stringify({ sessionKey: viewData.sessionKey })
             });
 

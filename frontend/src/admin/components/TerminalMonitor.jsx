@@ -3,6 +3,8 @@ import { Terminal, Users, Clock, Hash, ChevronRight, Activity, Shield, AlertTria
 import { sanitizeHTML } from '../../utils/sanitizer';
 import { useAdminAuth } from '../../hooks/useAdminAuth';
 
+import CONFIG from '../../config';
+
 const TerminalMonitor = () => {
     const { getToken } = useAdminAuth();
     const [sessions, setSessions] = useState([]);
@@ -18,7 +20,7 @@ const TerminalMonitor = () => {
                 ? { 'Authorization': `Bearer ${token}` }
                 : { 'x-admin-token': token };
 
-            const response = await fetch('/admin/terminal/sessions', {
+            const response = await fetch(`${CONFIG.API_BASE_URL}/api/admin/terminal/sessions`, {
                 headers
             });
             const data = await response.json();
@@ -36,7 +38,7 @@ const TerminalMonitor = () => {
                 ? { 'Authorization': `Bearer ${token}` }
                 : { 'x-admin-token': token };
 
-            const response = await fetch(`/admin/terminal/session/${key}`, {
+            const response = await fetch(`${CONFIG.API_BASE_URL}/api/admin/terminal/session/${key}`, {
                 headers
             });
             const data = await response.json();

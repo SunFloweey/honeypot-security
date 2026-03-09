@@ -17,6 +17,57 @@ const FAKE_USERS = [
 // The backend provides the API for login/register logic.
 
 // ==========================================
+// GET /login - Portale di login (Facade)
+// ==========================================
+router.get('/login', (req, res) => {
+    res.send(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Login - Global Tech Solutions</title>
+        <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+            .login-card { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+            .logo { text-align: center; margin-bottom: 1.5rem; }
+            .logo h2 { color: #004a99; margin: 0; }
+            .form-group { margin-bottom: 1rem; }
+            label { display: block; margin-bottom: 0.5rem; color: #555; font-size: 0.9rem; }
+            input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+            button { width: 100%; padding: 10px; background: #004a99; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 1rem; }
+            button:hover { background: #003366; }
+            .footer { text-align: center; margin-top: 1.5rem; font-size: 0.8rem; color: #888; }
+        </style>
+    </head>
+    <body>
+        <div class="login-card">
+            <div class="logo">
+                <h2>Global Tech Solutions</h2>
+                <p style="font-size: 0.8rem; color: #666;">Employee Portal</p>
+            </div>
+            <form action="/login" method="POST">
+                <div class="form-group">
+                    <label>Username or Email</label>
+                    <input type="text" name="username" placeholder="e.g. j.doe" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" name="password" placeholder="••••••••" required>
+                </div>
+                <button type="submit">Sign In</button>
+            </form>
+            <div class="footer">
+                <p>&copy; 2026 Secured by ViperScan Enterprise</p>
+                <a href="/forgot-password" style="color: #004a99; text-decoration: none;">Forgot password?</a>
+            </div>
+        </div>
+    </body>
+    </html>
+    `);
+});
+
+// ==========================================
 // POST /login - Tentativo di login
 // ==========================================
 router.post('/login', (req, res) => {

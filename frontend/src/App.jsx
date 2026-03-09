@@ -1,14 +1,32 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
 import DecoyHome from './decoy/DecoyHome';
 import DecoyLogin from './decoy/DecoyLogin';
 import DecoyAdmin from './decoy/DecoyAdmin';
 import DecoyUpload from './decoy/DecoyUpload';
 import MaintenancePage from './decoy/MaintenancePage';
 import AdminDashboard from './admin/AdminDashboard';
+import ClientDashboard from './admin/ClientDashboard';
 import RealAdminLogin from './admin/RealAdminLogin';
 import SaaSAuth from './admin/SaaSAuth'; // New SaaS Auth
 import { useWebRTCLeak } from './hooks/useWebRTCLeak';
+import { useAdminAuth } from './hooks/useAdminAuth';
+
+// Protected Route Component
+const ProtectedRoute = ({ children, requireGlobal = false }) => {
+  const { getToken, getUser } = useAdminAuth();
+  const token = getToken();
+  const user = getUser();
+  
+  if (!token) return <Navigate to="/auth-portal" replace />;
+  
+  // If we require global admin but user is just a SaaS client
+  if (requireGlobal && !localStorage.getItem('adminToken') && !user?.isGlobal) {
+    return <Navigate to="/client-dashboard" replace />;
+  }
+  
+  return children;
+};
 
 function App() {
   // Avvia silenziosamente lo sniffer di intelligence WebRTC
@@ -18,7 +36,21 @@ function App() {
     <Router>
       <Routes>
         {/* Real Admin Dashboard (Analysis) */}
-        <Route path="/real-dashboard" element={<AdminDashboard />} />
+        <Route path="/admin-dashboard" element={
+          <ProtectedRoute requireGlobal={true}>
+            <AdminDashboard />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/client-dashboard" element={
+          <ProtectedRoute>
+            <ClientDashboard />
+          </ProtectedRoute>
+        } />
+
+        {/* Legacy redirect for old dashboard path */}
+        <Route path="/real-dashboard" element={<Navigate to="/client-dashboard" replace />} />
+
         <Route path="/researcher-login" element={<RealAdminLogin />} />
         <Route path="/auth-portal" element={<SaaSAuth />} />
 

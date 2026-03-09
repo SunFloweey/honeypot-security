@@ -13,6 +13,36 @@ const DashboardOverview = ({ stats, logs, totalLogs, currentPage, onPageChange, 
             </header>
 
             <div className="grid-adaptive mb-2">
+                {(!totalLogs || totalLogs === 0) && (
+                    <div className="card terminal-card" style={{
+                        gridColumn: '1 / -1',
+                        background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.02) 100%)',
+                        border: '1px solid rgba(16, 185, 129, 0.2)',
+                        padding: '2rem',
+                        textAlign: 'center',
+                        animation: 'fadeIn 0.5s ease-out'
+                    }}>
+                        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🛡️</div>
+                        <h2 style={{ color: 'var(--researcher-green)', marginBottom: '1rem' }}>Welcome to ViperScan</h2>
+                        <p style={{ maxWidth: '600px', margin: '0 auto', color: '#94a3b8', lineHeight: '1.6' }}>
+                            Your security dashboard is currently empty. This is perfectly normal if your honeypots haven't been attacked yet!
+                        </p>
+                        <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'center', gap: '2rem' }}>
+                            <div style={{ textAlign: 'left' }}>
+                                <div style={{ color: 'var(--researcher-green)', fontWeight: 'bold' }}>1. Create an API Key</div>
+                                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>Go to API Keys section</div>
+                            </div>
+                            <div style={{ textAlign: 'left' }}>
+                                <div style={{ color: 'var(--researcher-green)', fontWeight: 'bold' }}>2. Install the SDK</div>
+                                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>Protect your apps</div>
+                            </div>
+                            <div style={{ textAlign: 'left' }}>
+                                <div style={{ color: 'var(--researcher-green)', fontWeight: 'bold' }}>3. View Live Attacks</div>
+                                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>Watch hackers in real-time</div>
+                            </div>
+                        </div>
+                    </div>
+                )}
                 <div className="card terminal-card">
                     <small className="text-muted font-bold">TOTAL REQUESTS</small>
                     <div className="mt-1 font-h1 font-bold text-researcher">{stats?.summary?.totalLogs}</div>
@@ -25,8 +55,8 @@ const DashboardOverview = ({ stats, logs, totalLogs, currentPage, onPageChange, 
                 {/* Live AI Analysis Card */}
                 <div className="card terminal-card" style={{
                     borderLeft: `4px solid ${liveAnalysis?.level === 'Critical' ? '#ef4444' :
-                            liveAnalysis?.level === 'High' ? '#f97316' :
-                                liveAnalysis?.level === 'Medium' ? '#eab308' : '#10b981'
+                        liveAnalysis?.level === 'High' ? '#f97316' :
+                            liveAnalysis?.level === 'Medium' ? '#eab308' : '#10b981'
                         }`,
                     minWidth: '250px'
                 }}>
@@ -62,8 +92,8 @@ const DashboardOverview = ({ stats, logs, totalLogs, currentPage, onPageChange, 
             {/* Traffic Trend Chart (Line Chart) */}
             <section className="mb-2">
                 <h3 className="mb-1" style={{ color: 'white' }}>Traffic Trend (All History)</h3>
-                <div className="card terminal-card" style={{ height: '250px' }}>
-                    <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                <div className="card terminal-card" style={{ height: '250px', position: 'relative' }}>
+                    <ResponsiveContainer width="100%" height="100%" debounce={50}>
                         <AreaChart data={stats?.timeSeries || []} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                             <defs>
                                 <linearGradient id="colorRequests" x1="0" y1="0" x2="0" y2="1">
@@ -87,9 +117,9 @@ const DashboardOverview = ({ stats, logs, totalLogs, currentPage, onPageChange, 
             <div className="grid-2-col mb-2">
                 <section>
                     <h3 className="mb-1" style={{ color: 'white' }}>Attack Distribution</h3>
-                    <div className="card terminal-card" style={{ height: '300px' }}>
+                    <div className="card terminal-card" style={{ height: '300px', position: 'relative' }}>
                         {stats?.attacks && stats.attacks.length > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                            <ResponsiveContainer width="100%" height="100%" debounce={50}>
                                 <PieChart>
                                     <Pie
                                         data={stats.attacks}

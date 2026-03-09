@@ -19,6 +19,10 @@ import ApiKeyManager from './components/ApiKeyManager';
 import TenantManager from './components/TenantManager';
 
 const AdminDashboard = () => {
+    React.useEffect(() => {
+        document.title = "ViperScan Intelligence - Security Dashboard";
+    }, []);
+
     // Auth
     const { getToken } = useAdminAuth();
 

@@ -12,7 +12,12 @@ const MaintenancePage = ({ title, code, message }) => {
             <nav className="nav-standard">
                 <div className="nav-content">
                     <Link to="/" className="nav-brand">
-                        <div className="nav-logo">{CONFIG.BRAND.LOGO_LETTER}</div>
+                        <img
+                            src={CONFIG.BRAND.LOGO_IMAGE}
+                            alt={`${CONFIG.BRAND.NAME} Logo`}
+                            className="nav-logo"
+                            style={{ width: '28px', height: '28px' }}
+                        />
                         <span className="font-bold">{CONFIG.BRAND.NAME}</span>
                     </Link>
                 </div>

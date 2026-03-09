@@ -4,13 +4,22 @@ import CONFIG from '../config';
 
 // Homepage istituzionale della dashboard finta
 const DecoyHome = () => {
+    React.useEffect(() => {
+        document.title = `${CONFIG.BRAND.NAME} - Internal Portal`;
+    }, []);
+
     return (
         <div className="app-wrapper">
             {/* Top Navbar */}
             <nav className="nav-standard">
                 <div className="nav-content">
                     <div className="nav-brand">
-                        <div className="nav-logo">{CONFIG.BRAND.LOGO_LETTER}</div>
+                        <img
+                            src={CONFIG.BRAND.LOGO_IMAGE}
+                            alt={`${CONFIG.BRAND.NAME} Logo`}
+                            className="nav-logo"
+                            style={{ width: '32px', height: '32px' }}
+                        />
                         <span className="font-bold text-accent">{CONFIG.BRAND.NAME}</span>
                     </div>
                     <div className="nav-links">

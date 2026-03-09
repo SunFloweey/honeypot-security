@@ -56,12 +56,30 @@ class ThreatRepository {
         // 2. Applichiamo il Clamp 0-100 per singola sessione
         const newTotal = Math.min(100, oldTotal + addedRisk);
 
-        await session.update({ maxRiskScore: newTotal });
+        if (typeof session.update === 'function') {
+            await session.update({ maxRiskScore: newTotal });
+        } else {
+            const Session = require('../../../models/Session');
+            await Session.update({ maxRiskScore: newTotal }, { where: { sessionKey: session.sessionKey } });
+        }
 
         // 3. Calcola risk score AGGREGATO per IP (somma di tutte le sessioni dello stesso IP)
         const Session = require('../../../models/Session');
+
+        let ipAddress = session.ipAddress;
+        if (!ipAddress) {
+            // Fallback: se ipAddress manca su session, cerchiamo di recuperarlo dal DB tramite sessionKey
+            const fullSession = await Session.findByPk(session.sessionKey, { attributes: ['ipAddress'] });
+            ipAddress = fullSession?.ipAddress;
+        }
+
+        if (!ipAddress) {
+            console.warn(`⚠️ [ThreatRepository] Could not determine IP address for session ${session.sessionKey}. Skipping aggregated risk.`);
+            return;
+        }
+
         const allSessionsForIP = await Session.findAll({
-            where: { ipAddress: session.ipAddress },
+            where: { ipAddress: ipAddress },
             attributes: ['maxRiskScore']
         });
 
@@ -79,12 +97,12 @@ class ThreatRepository {
 
         if (sessionReachedThreshold || ipReachedThreshold || heavyOnCritical) {
             notificationService.sendCriticalAlert({
-                ipAddress: session.ipAddress,
+                ipAddress: ipAddress,
                 sessionKey: session.sessionKey,
                 riskScore: newTotal,
                 ipTotalRisk: ipTotalRisk,
                 message: ipReachedThreshold && !sessionReachedThreshold
-                    ? `🚨 IP CRITICO: ${session.ipAddress} ha raggiunto ${ipTotalRisk}/100 totali (somma sessioni)`
+                    ? `🚨 IP CRITICO: ${ipAddress} ha raggiunto ${ipTotalRisk}/100 totali (somma sessioni)`
                     : `🚨 Soglia Critica: ${newTotal}/100 - Rilevato: ${classifications[0].category}`
             });
         }

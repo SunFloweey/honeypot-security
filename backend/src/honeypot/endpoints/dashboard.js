@@ -1,7 +1,7 @@
 const express = require('express');
 const { sequelize, testConnection } = require('../../config/database');
 const { Op, fn, col, literal } = require('sequelize'); // Aggiunto literal per comodità
-const { Log, Session, ApiKey, Classification } = require('../../models');
+const { Log, Session, ApiKey, Classification, BannedIP } = require('../../models');
 const notificationService = require('../utils/notificationService');
 const ticketService = require('../utils/ticketService');
 
@@ -11,7 +11,10 @@ const router = express.Router();
  * Helper: Crea filtro where per isolamento tenant
  */
 async function getTenantFilter(req) {
-    if (req.user && req.user.isGlobal) return {}; // Super-admin vede tutto
+    if (req.user && req.user.isGlobal) {
+        console.log('👑 [Dashboard Auth] Global Admin detected - Showing ALL logs (including orphans)');
+        return {};
+    }
 
     if (req.user && req.user.userId) {
         // Trova tutte le chiavi API dell'utente
@@ -21,12 +24,20 @@ async function getTenantFilter(req) {
         });
         const keyIds = userKeys.map(k => k.id);
 
+        console.log(`👤 [Dashboard Auth] User: ${req.user.email} (ID: ${req.user.userId}) - Found ${keyIds.length} API Keys`);
+
+        // Se l'utente non ha chiavi, non deve vedere nulla (nemmeno i log orfani)
+        if (keyIds.length === 0) {
+            return { apiKeyId: '00000000-0000-0000-0000-000000000000' };
+        }
+
         return {
             apiKeyId: { [Op.in]: keyIds }
         };
     }
 
-    return { apiKeyId: '00000000-0000-0000-0000-000000000000' }; // Nessun log se non autenticato correttamente
+    console.warn('⚠️ [Dashboard Auth] No valid user session found for filtering');
+    return { apiKeyId: '00000000-0000-0000-0000-000000000000' };
 }
 
 // ==========================================
@@ -39,11 +50,25 @@ async function getTenantFilter(req) {
  * This avoids passing the full ADMIN_TOKEN via query parameters.
  */
 router.get('/stream-ticket', (req, res) => {
-    const ticket = ticketService.createTicket({ ip: req.ip });
+    // Include user identity in the ticket metadata for SSE isolation
+    const metadata = {
+        ip: req.ip,
+        userId: req.user ? req.user.userId : null,
+        isGlobal: req.user ? !!req.user.isGlobal : false
+    };
+
+    const ticket = ticketService.createTicket(metadata);
     res.json({ ticket });
 });
 
 router.get('/stream', (req, res) => {
+    // metadata is already validated and attached by adminAuthMiddleware
+    const metadata = req.sseMetadata;
+
+    if (!metadata) {
+        return res.status(403).json({ error: 'Invalid or expired SSE ticket' });
+    }
+
     // Configurazioni socket per mantenere la connessione aperta
     req.socket.setKeepAlive(true);
     req.socket.setTimeout(0); // Nessun timeout per SSE
@@ -60,8 +85,8 @@ router.get('/stream', (req, res) => {
     res.write(': connected\n\n');
     res.write(': heartbeat\n\n');
 
-    // Aggiungi client
-    notificationService.addClient(res);
+    // Aggiungi client con i suoi metadati (userId, isGlobal)
+    notificationService.addClient(res, metadata);
 
     // Heartbeat forzata più frequente (30s) per evitare timeout browser (solitamente 45s)
     const heartbeatTimer = setInterval(() => {
@@ -103,9 +128,23 @@ router.get('/db-check', async (req, res) => {
     }
 });
 
-/**
- * Overview - Statistiche generali degli ultimi 24h
- */
+// Internal bridge for notifications from Honeypot to Admin
+router.post('/internal/notify', async (req, res) => {
+    // Basic security check
+    if (req.headers['x-internal-secret'] !== process.env.ADMIN_TOKEN) {
+        return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const { type, ...data } = req.body;
+
+    // Admin server's notificationService will broadcast this to SSE clients
+    if (notificationService.isAdminServer) {
+        notificationService._handleEvent(type, data);
+    }
+
+    res.json({ status: 'ok' });
+});
+
 router.get('/overview', async (req, res) => {
     try {
         let startTime, endTime;
@@ -116,6 +155,7 @@ router.get('/overview', async (req, res) => {
             endTime = new Date(`${req.query.date}T23:59:59.999Z`);
             isSingleDay = true;
         } else {
+            // Default: last 24 hours
             startTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
             endTime = new Date();
         }
@@ -127,6 +167,8 @@ router.get('/overview', async (req, res) => {
             ...tenantClause,
             timestamp: dateRangeClause
         };
+
+        console.log(`📊 [Dashboard] Fetching overview for ${req.user.email} (Global: ${!!req.user.isGlobal})`);
 
         // 1. Parallel execution of all dashboard queries to reduce latency
         const [
@@ -222,7 +264,7 @@ router.get('/overview', async (req, res) => {
         });
 
         res.json({
-            period: isSingleDay ? 'Day View' : 'Last 24h',
+            period: isSingleDay ? 'Day View' : 'Last 7 Days',
             summary: { totalLogs, totalSessions },
             attacks: attackStats.map(a => ({ ...a, count: parseInt(a.count, 10) })),
             timeSeries,
@@ -263,8 +305,7 @@ router.get('/logs', async (req, res) => {
             ...tenantClause
         };
 
-        // --- LOGICA FILTRO TEMPORALE (Modificata) ---
-        // Se c'è una data specifica nel calendario, ha la priorità
+        // --- LOGICA FILTRO TEMPORALE ---
         if (req.query.date && req.query.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
             console.log(`📅 Filtering logs by UTC date: ${req.query.date}`);
             const startOfDay = new Date(`${req.query.date}T00:00:00.000Z`);
@@ -273,13 +314,16 @@ router.get('/logs', async (req, res) => {
                 [Op.between]: [startOfDay, endOfDay]
             };
         }
-        // ALTRIMENTI, se richiesto il timespan 24h (Default Overview)
+        // Se non c'è una data specifica e NON è richiesta esplicitamente l'overview 24h, 
+        // mostriamo i log più recenti senza limiti di tempo per evitare "sparizioni" dovute all'orologio.
         else if (timespan === '24h') {
             const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
             whereClause.timestamp = {
                 [Op.gte]: twentyFourHoursAgo
             };
             console.log("🕒 Filtering logs for the last 24 hours");
+        } else {
+            console.log("🔓 No time filter applied (showing all-time logs for this user)");
         }
 
         // Filtro per risk_min usa il campo riskScore del Log (non le Classifications)
@@ -333,18 +377,28 @@ router.get('/logs', async (req, res) => {
  */
 router.get('/session/:key', async (req, res) => {
     try {
+        const tenantClause = await getTenantFilter(req);
+
         const session = await Session.findByPk(req.params.key, {
             include: [{
                 model: Log,
-                include: [Classification],
-                order: [['timestamp', 'ASC']]
-            }]
+                as: 'Logs',
+                where: tenantClause, // Filtra i log della sessione per tenant
+                required: true, // Se non ci sono log accessibili per questo tenant, non restituire la sessione
+                include: [{
+                    model: Classification,
+                    as: 'Classifications'
+                }]
+            }],
+            order: [
+                [{ model: Log, as: 'Logs' }, 'timestamp', 'ASC']
+            ]
         });
 
-        if (!session) return res.status(404).json({ error: 'Session not found' });
+        if (!session) return res.status(404).json({ error: 'Session not found or access denied' });
         res.json(session);
     } catch (err) {
-        console.error(err);
+        console.error('❌ Session Detail Error:', err);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
@@ -356,36 +410,33 @@ router.get('/session/:key', async (req, res) => {
 router.get('/ip/:ip', async (req, res) => {
     try {
         const ipAddress = req.params.ip;
+        const tenantClause = await getTenantFilter(req);
 
-        // 1. Ottieni tutti i log per questo IP
+        // 1. Ottieni tutti i log per questo IP (filtrati per tenant)
         const logs = await Log.findAll({
-            where: { ipAddress },
+            where: { ...tenantClause, ipAddress },
             include: [{ model: Classification, required: false }],
             order: [['timestamp', 'DESC']]
         });
 
+        if (logs.length === 0 && !req.user.isGlobal) {
+            return res.status(404).json({ error: 'IP data not found or access denied' });
+        }
+
         // 2. Calcola risk score totale per IP
-        // Somma di tutti i riskScore dei singoli log
         const totalRiskScore = logs.reduce((sum, log) => sum + (log.riskScore || 0), 0);
 
-        // 3. Ottieni sessioni associate a questo IP per max_risk_score
+        // 3. Ottieni sessioni associate a questo IP
         const sessions = await Session.findAll({
             where: { ipAddress },
             attributes: ['sessionKey', 'maxRiskScore', 'requestCount', 'firstSeen', 'lastSeen']
         });
 
-        // 4. Aggregato delle sessioni
-        const sessionsMaxRisk = Math.max(...sessions.map(s => s.maxRiskScore || 0), 0);
-        const totalRequests = sessions.reduce((sum, s) => sum + (s.requestCount || 0), 0);
-
         res.json({
             ip: ipAddress,
-            // Risk Score aggregato: max tra somma log e max sessione
-            totalRiskScore: Math.max(totalRiskScore, sessionsMaxRisk),
+            totalRiskScore,
             logsCount: logs.length,
-            totalRequests,
             sessionsCount: sessions.length,
-            sessions,
             logs
         });
     } catch (err) {
@@ -456,6 +507,82 @@ router.get('/timeseries', async (req, res) => {
     } catch (err) {
         console.error('❌ TimeSeries Error:', err);
         res.status(500).json({ error: 'Internal Server Error', details: err.message });
+    }
+});
+
+// Internal bridge for notifications from Honeypot to Admin
+router.post('/internal/notify', async (req, res) => {
+    // Basic security check
+    if (req.headers['x-internal-secret'] !== process.env.ADMIN_TOKEN) {
+        return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const { type, ...data } = req.body;
+    console.log(`📩 [Admin API] Received internal notification: ${type} from ${req.ip}`);
+
+    // Admin server's notificationService will broadcast this to SSE clients
+    if (notificationService.isAdminServer) {
+        notificationService._handleEvent(type, data);
+    }
+
+    res.json({ status: 'ok' });
+});
+
+// ==========================================
+// THREAT RESPONSE ACTIONS
+// ==========================================
+
+/**
+ * POST /ip/ban - Bans an IP address
+ */
+router.post('/ip/ban', async (req, res) => {
+    try {
+        const { ipAddress, reason } = req.body;
+        if (!ipAddress) return res.status(400).json({ error: 'IP Address required' });
+
+        await BannedIP.upsert({
+            ipAddress,
+            reason: reason || 'Banned from Dashboard',
+            bannedAt: new Date()
+        });
+
+        console.log(`🚫 [Security] IP ${ipAddress} has been BANNED by admin`);
+        res.json({ status: 'ok', message: `IP ${ipAddress} banned successfully` });
+    } catch (err) {
+        console.error('❌ Ban Error:', err);
+        res.status(500).json({ error: 'Failed to ban IP' });
+    }
+});
+
+/**
+ * POST /session/isolate - Marks a session for isolation/surveillance
+ */
+router.post('/session/isolate', async (req, res) => {
+    try {
+        const { sessionKey } = req.body;
+        if (!sessionKey) return res.status(400).json({ error: 'Session Key required' });
+
+        // For now, we update the session or just log the intent
+        // In a real scenario, this would trigger a stricter decoy persona
+        await Session.update({ maxRiskScore: 100 }, { where: { sessionKey } });
+
+        console.log(`🛡️ [Security] Session ${sessionKey} ISOLATED for surveillance`);
+        res.json({ status: 'ok', message: `Session isolated` });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to isolate session' });
+    }
+});
+
+/**
+ * POST /notify/ignore - Acknowledges and silences an alert
+ */
+router.post('/notify/ignore', async (req, res) => {
+    try {
+        const { sessionKey, ipAddress } = req.body;
+        console.log(`✨ [Security] Alert ignored for ${ipAddress || sessionKey} by admin`);
+        res.json({ status: 'ok' });
+    } catch (err) {
+        res.status(500).json({ error: 'Error' });
     }
 });
 

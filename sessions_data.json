@@ -1,0 +1,82 @@
+[
+  {
+    "sessionKey": "9c2bf42ea191a63fc700c70220821495",
+    "ipAddress": "::ffff:127.0.0.1",
+    "maxRiskScore": 100,
+    "requestCount": 177,
+    "firstSeen": "2026-02-02T16:06:32.403Z",
+    "lastSeen": "2026-02-02T16:14:58.260Z"
+  },
+  {
+    "sessionKey": "3efdca4eb7d7343a559fa08a69ec571e",
+    "ipAddress": "::1",
+    "maxRiskScore": 100,
+    "requestCount": 15,
+    "firstSeen": "2026-01-19T11:33:30.230Z",
+    "lastSeen": "2026-01-21T15:40:30.768Z"
+  },
+  {
+    "sessionKey": "9b7ef78a9216e83631f5af001b272ecc",
+    "ipAddress": "::1",
+    "maxRiskScore": 100,
+    "requestCount": 18,
+    "firstSeen": "2026-01-26T09:42:42.826Z",
+    "lastSeen": "2026-01-26T11:29:07.894Z"
+  },
+  {
+    "sessionKey": "25547128b97f7dc4cebe96953926760e",
+    "ipAddress": "::1",
+    "maxRiskScore": 100,
+    "requestCount": 1,
+    "firstSeen": "2026-02-23T15:28:49.402Z",
+    "lastSeen": "2026-03-03T15:38:04.682Z"
+  },
+  {
+    "sessionKey": "565c5cb315b36866a7ade2928f473c4b",
+    "ipAddress": "::1",
+    "maxRiskScore": 100,
+    "requestCount": 1,
+    "firstSeen": "2026-02-02T16:01:03.655Z",
+    "lastSeen": "2026-03-03T16:04:06.883Z"
+  },
+  {
+    "sessionKey": "ccf009dab53fbd93109ac616edb15769",
+    "ipAddress": "::1",
+    "maxRiskScore": 100,
+    "requestCount": 18,
+    "firstSeen": "2026-01-26T12:12:13.772Z",
+    "lastSeen": "2026-01-26T12:58:41.210Z"
+  },
+  {
+    "sessionKey": "e8312685087b2d278ed03badf3ba789b",
+    "ipAddress": "::1",
+    "maxRiskScore": 100,
+    "requestCount": 52,
+    "firstSeen": "2026-02-17T12:06:37.863Z",
+    "lastSeen": "2026-02-18T16:02:39.682Z"
+  },
+  {
+    "sessionKey": "7dd30706f1d988825b4d0b13270f57dd",
+    "ipAddress": "::1",
+    "maxRiskScore": 100,
+    "requestCount": 1,
+    "firstSeen": "2026-02-23T16:07:49.704Z",
+    "lastSeen": "2026-03-02T12:58:14.069Z"
+  },
+  {
+    "sessionKey": "61f59cd60ae46e67038bc8fc36e1ad9d",
+    "ipAddress": "::1",
+    "maxRiskScore": 100,
+    "requestCount": 389,
+    "firstSeen": "2026-01-19T11:48:30.011Z",
+    "lastSeen": "2026-01-20T12:40:45.810Z"
+  },
+  {
+    "sessionKey": "be5c74cf3a450d710990e5e93d8dc2f9",
+    "ipAddress": "::1",
+    "maxRiskScore": 60,
+    "requestCount": 1,
+    "firstSeen": "2026-02-09T10:40:05.894Z",
+    "lastSeen": "2026-03-03T14:35:54.201Z"
+  }
+]

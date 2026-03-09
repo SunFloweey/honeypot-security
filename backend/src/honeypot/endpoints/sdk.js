@@ -25,17 +25,21 @@ const sdkAuth = async (req, res, next) => {
     // 1. Cerca nella tabella ApiKey (SaaS multi-tenant)
     try {
         const keyRecord = await ApiKey.findOne({ where: { key: apiKey, isActive: true } });
+
         if (keyRecord) {
             // Aggiorna lastUsedAt in background
-            keyRecord.update({ lastUsedAt: new Date() }).catch(() => { });
+            keyRecord.lastUsedAt = new Date();
+            await keyRecord.save().catch(() => { });
+
             req.tenantKeyId = keyRecord.id;
             req.tenantUserId = keyRecord.userId;
             req.tenantProjectName = keyRecord.name;
             return next();
+        } else {
+            console.log(`🔍 [SDK Auth] Chiave non trovata o inattiva: ${apiKey.substring(0, 10)}...`);
         }
     } catch (error) {
-        // Se il DB non ha ancora la tabella (prima migrazione), fallback
-        console.warn('⚠️ [SDK Auth] Tabella ApiKey non disponibile, uso fallback ADMIN_TOKEN');
+        console.error('❌ [SDK Auth] Error:', error.message);
     }
 
     // 2. Fallback: ADMIN_TOKEN (retrocompatibilità)
@@ -45,6 +49,8 @@ const sdkAuth = async (req, res, next) => {
         req.tenantProjectName = req.headers['x-app-name'] || 'LegacyAdmin';
         return next();
     }
+
+    console.log(`🚫 [SDK Auth] Accesso negato per chiave: ${apiKey.substring(0, 10)}... (AdminToken: ${String(process.env.ADMIN_TOKEN).substring(0, 5)}...)`);
 
     return res.status(401).json({
         success: false,
@@ -67,11 +73,15 @@ router.post('/logs', (req, res) => {
         return res.status(400).json({ success: false, error: 'Event name is required' });
     }
 
+    // sessionKey deve essere STRING(32) → usiamo MD5 di appName per avere un hash deterministico
+    const sessionKey = req.body.sessionKey ||
+        crypto.createHash('md5').update(`sdk_${appName}`).digest('hex'); // 32 char hex
+
     const logEntry = {
         timestamp: new Date().toISOString(),
         req: {
-            id: `sdk_${crypto.randomUUID()}`,
-            sessionKey: req.body.sessionKey || `sdk_${appName}`,
+            id: crypto.randomUUID(), // UUID puro, senza prefissi: compatibile con PostgreSQL UUID
+            sessionKey,
             method: 'SDK_REPORT',
             path: `sdk://${appName}/${event}`,
             ipAddress: ipAddress || req.ip,

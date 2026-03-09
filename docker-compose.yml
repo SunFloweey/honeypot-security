@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  # Database: PostgreSQL
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      - POSTGRES_DB=honeypot
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d honeypot" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Honeypot Backend (Attack Surface)
+  honeypot:
+    build:
+      context: ./backend
+    restart: always
+    command: node server.js
+    env_file:
+      - backend/.env
+    environment:
+      - DB_HOST=db
+      - PORT=4002
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "4002:4002"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Admin Dashboard Backend (Management)
+  admin:
+    build:
+      context: ./backend
+    restart: always
+    command: node admin-server.js
+    env_file:
+      - backend/.env
+    environment:
+      - DB_HOST=db
+      - PORT=4003
+    ports:
+      - "4003:4003"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Frontend (Vite + Nginx)
+  frontend:
+    build:
+      context: ./frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      honeypot:
+        condition: service_started
+      admin:
+        condition: service_started
+
+volumes:
+  postgres_data:

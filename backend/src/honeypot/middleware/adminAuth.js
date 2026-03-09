@@ -58,22 +58,39 @@ function adminAuthMiddleware(req, res, next) {
 
     // 1. Check for Security Ticket (High Priority for SSE)
     if (req.path.includes('/stream') && queryToken) {
-        if (ticketService.validateTicket(queryToken)) {
+        const metadata = ticketService.validateTicket(queryToken);
+        if (metadata) {
             console.log(`📡 [Security] SSE connection authorized via Ticket from ${req.ip}`);
+            req.sseMetadata = metadata; // Pass metadata to the handler
             return next();
         }
     }
 
-    // 2. Check for SaaS JWT
+    // 2. Check for SaaS JWT or Static Admin Token via Bearer
     if (bearerToken && bearerToken.startsWith('Bearer ')) {
         const token = bearerToken.split(' ')[1];
+
+        // Se il token dopo 'Bearer ' è l'ADMIN_TOKEN statico, lo accettiamo come Global Admin
+        if (token === ADMIN_TOKEN) {
+            req.user = { role: 'admin', isGlobal: true };
+            console.log(`✅ Admin Auth: Verified STATIC token via Bearer from ${req.ip}`);
+            return next();
+        }
+
         try {
             const decoded = jwt.verify(token, process.env.JWT_SECRET || process.env.ADMIN_TOKEN);
-            req.user = decoded; // Attach user info (userId, email, role)
+
+            // Normalizziamo req.user per assicurarci che userId sia presente
+            req.user = {
+                userId: decoded.userId || decoded.id,
+                email: decoded.email,
+                role: decoded.role,
+                isGlobal: false
+            };
+
             return next();
         } catch (err) {
             console.warn(`[SECURITY] Invalid SaaS JWT from ${req.ip}:`, err.message);
-            // Fallthrough to admin token if JWT fails? No, better 401 if they sent a Bearer header
             return res.status(401).json({ error: 'Unauthorized: Token non valido' });
         }
     }

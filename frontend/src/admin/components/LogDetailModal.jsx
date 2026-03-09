@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import ThreatIntelCard from './ThreatIntelCard';
 import { Terminal, Shield, Loader2, Sparkles, Database, Globe, Calendar } from 'lucide-react';
 import { sanitizeHTML, sanitizeData } from '../../utils/sanitizer';
+import { useAdminAuth } from '../../hooks/useAdminAuth';
 
 const LogDetailModal = ({ log, onClose }) => {
     const [analysis, setAnalysis] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const { getToken } = useAdminAuth();
 
     // Reset state when log changes
     useEffect(() => {
@@ -26,12 +28,17 @@ const LogDetailModal = ({ log, onClose }) => {
         setLoading(true);
         setError(null);
         try {
+            const token = getToken();
+            const isSaaS = !!localStorage.getItem('saasToken');
+            
+            const headers = {
+                'Content-Type': 'application/json',
+                ...(isSaaS ? { 'Authorization': `Bearer ${token}` } : { 'x-admin-token': token })
+            };
+
             const response = await fetch('/api/ai/decode-payload', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-admin-token': localStorage.getItem('adminToken'),
-                },
+                headers,
                 body: JSON.stringify({ payload: rawPayload, mode: 'full' }),
             });
 

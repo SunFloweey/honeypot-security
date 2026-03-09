@@ -76,9 +76,10 @@ const TenantManager = () => {
     };
 
     const handleToggleStatus = async (id, currentStatus) => {
+        setError('');
         try {
             const token = getToken();
-            await fetch(`/api/v1/saas/tenants/${id}/status`, {
+            const res = await fetch(`/api/v1/saas/tenants/${id}/status`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -86,21 +87,36 @@ const TenantManager = () => {
                 },
                 body: JSON.stringify({ isActive: !currentStatus })
             });
-            fetchTenants();
+            const data = await res.json();
+            if (data.success) {
+                setSuccess(`Stato cliente ${currentStatus ? 'sospeso' : 'attivato'} con successo.`);
+                fetchTenants();
+            } else {
+                setError(data.error || 'Errore durante l\'aggiornamento.');
+            }
         } catch (err) {
             setError('Errore durante l\'aggiornamento dello stato.');
         }
     };
 
     const handleDeleteTenant = async (id, name) => {
-        if (!window.confirm(`ATTENZIONE: Stai per eliminare DEFINITIVAMENTE "${name}". Continuare?`)) return;
+        if (!window.confirm(`⚠️ ATTENZIONE: Stai per eliminare DEFINITIVAMENTE "${name}".\n\nQuesta operazione non può essere annullata. Continuare?`)) return;
+
+        setError('');
+        setSuccess('');
         try {
             const token = getToken();
             const res = await fetch(`/api/v1/saas/tenants/${id}`, {
                 method: 'DELETE',
                 headers: { 'x-admin-token': token }
             });
-            if (res.ok) fetchTenants();
+            const data = await res.json();
+            if (data.success) {
+                setSuccess(`🗑️ Cliente "${name}" eliminato correttamente.`);
+                fetchTenants(); // Ricarica la lista per far sparire la riga
+            } else {
+                setError(data.error || 'Errore durante l\'eliminazione.');
+            }
         } catch (err) {
             setError('Errore durante l\'eliminazione.');
         }
@@ -119,27 +135,24 @@ const TenantManager = () => {
                     <h3 style={{ color: 'white', marginBottom: '1.5rem' }}>Attiva Nuovo Cliente</h3>
 
                     {error && <div className="tag tag-danger mb-2 w-full">{error}</div>}
-                    {success && (
-                        <div className="mb-2">
-                            <div className="tag tag-success w-full mb-1">{success}</div>
-                            {lastProvisioned && (
-                                <div style={{
-                                    background: '#1e293b',
-                                    border: '1px solid var(--researcher-green)',
-                                    padding: '1rem',
-                                    borderRadius: '4px',
-                                    marginTop: '0.5rem'
-                                }}>
-                                    <h4 style={{ color: 'var(--researcher-green)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>🔐 CREDENZIALI GENERATE</h4>
-                                    <div className="monospace" style={{ fontSize: '0.85rem' }}>
-                                        <div style={{ marginBottom: '4px' }}><strong>Username:</strong> {lastProvisioned.email}</div>
-                                        <div><strong>Password:</strong> <span style={{ color: '#fbbf24' }}>{lastProvisioned.password}</span></div>
-                                    </div>
-                                    <p style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '0.5rem', fontStyle: 'italic' }}>
-                                        Copia queste credenziali ora. Per sicurezza, non verranno mostrate di nuovo.
-                                    </p>
-                                </div>
-                            )}
+                    {success && <div className="tag tag-success mb-2 w-full">{success}</div>}
+
+                    {lastProvisioned && (
+                        <div style={{
+                            background: '#1e293b',
+                            border: '1px solid var(--researcher-green)',
+                            padding: '1rem',
+                            borderRadius: '4px',
+                            marginBottom: '1rem'
+                        }}>
+                            <h4 style={{ color: 'var(--researcher-green)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>🔐 CREDENZIALI GENERATE</h4>
+                            <div className="monospace" style={{ fontSize: '0.85rem' }}>
+                                <div style={{ marginBottom: '4px' }}><strong>Username:</strong> {lastProvisioned.email}</div>
+                                <div><strong>Password:</strong> <span style={{ color: '#fbbf24' }}>{lastProvisioned.password}</span></div>
+                            </div>
+                            <p style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '0.5rem', fontStyle: 'italic' }}>
+                                Copia queste credenziali ora. Per sicurezza, non verranno mostrate di nuovo.
+                            </p>
                         </div>
                     )}
 
@@ -203,13 +216,15 @@ const TenantManager = () => {
                     </div>
                     <div className="mt-2" style={{ fontSize: '0.8rem', color: '#64748b' }}>
                         <p>ℹ️ Le credenziali vengono inviate tramite canali Out-of-Band separati per garantire la massima sicurezza al cliente.</p>
+                        <p className="mt-1">🔒 La sospensione di un cliente impedisce l'accesso immediato alla sua dashboard e blocca il monitoraggio dei log per le sue API key.</p>
                     </div>
                 </div>
             </div>
 
             <div className="table-container card terminal-card mt-2" style={{ padding: 0 }}>
-                <header style={{ padding: '1rem', borderBottom: '1px solid var(--researcher-border)' }}>
+                <header style={{ padding: '1rem', borderBottom: '1px solid var(--researcher-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h3 style={{ color: 'white', margin: 0 }}>Elenco Clienti Attivi</h3>
+                    <button onClick={fetchTenants} className="btn-ghost" style={{ fontSize: '0.7rem' }}>Aggiorna Lista</button>
                 </header>
                 <table>
                     <thead>
@@ -224,7 +239,7 @@ const TenantManager = () => {
                     </thead>
                     <tbody>
                         {tenants.map(t => (
-                            <tr key={t.id}>
+                            <tr key={t.id} style={{ opacity: t.isActive ? 1 : 0.6 }}>
                                 <td>
                                     <div style={{ color: 'var(--researcher-green)', fontWeight: 'bold' }}>{t.name}</div>
                                     <div style={{ fontSize: '0.7rem', color: '#64748b' }}>ID: {t.id}</div>
@@ -254,8 +269,9 @@ const TenantManager = () => {
                                             style={{
                                                 padding: '4px 10px',
                                                 fontSize: '0.7rem',
-                                                minWidth: '70px',
-                                                background: t.isActive ? '#475569' : 'var(--researcher-green)'
+                                                minWidth: '85px',
+                                                background: t.isActive ? '#475569' : 'var(--researcher-green)',
+                                                border: 'none'
                                             }}
                                         >
                                             {t.isActive ? 'Sospendi' : 'Riattiva'}

@@ -80,10 +80,11 @@ b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1 c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v
 // Environment files (Dynamic Honeytokens)
 // ==========================================
 router.get(['/.env', '/env', '/.env.local', '/.env.production', '/.env.staging', '/.env.backup'], (req, res) => {
-    console.log(`🍯 [Honeytoken] .env accessed from ${req.ip} - Path: ${req.path}`);
+    console.log(`🍯 [Honeytoken] .env accessed from ${req.ip} - Path: ${req.path} (Tenant: ${req.tenantKeyId || 'Global'})`);
     const envContent = HoneytokenService.generateEnvFile({
         appName: 'SecureApp',
         appUrl: 'https://api.secureapp.io',
+        apiKeyId: req.tenantKeyId
     });
     res.type('text/plain').send(envContent);
 });
@@ -98,7 +99,14 @@ router.get(['/backup.sql', '/database.sql', '/dump.sql'], (req, res) => {
 router.get(['/backup.zip', '/site-backup.zip', '/www.zip'], (req, res) => {
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', 'attachment; filename="backup.zip"');
-    res.send('PK (fake zip header) - This is a honeypot');
+    
+    // Un mini-zip valido ma "corrotto" o vuoto per ingannare gli scanner
+    const fakeZip = Buffer.from([
+        0x50, 0x4b, 0x03, 0x04, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00
+    ]);
+    res.send(fakeZip);
 });
 
 // ==========================================
@@ -109,12 +117,14 @@ router.get(['/config.php', '/configuration.php'], (req, res) => {
 });
 
 router.get('/config.json', (req, res) => {
-    console.log(`🍯 [Honeytoken] config.json accessed from ${req.ip}`);
+    console.log(`🍯 [Honeytoken] config.json accessed from ${req.ip} (Tenant: ${req.tenantKeyId || 'Global'})`);
     const config = HoneytokenService.generateConfigJson({
         appName: 'SecureApp',
+        apiKeyId: req.tenantKeyId
     });
     res.json(config);
 });
+
 
 router.get('/web.config', (req, res) => {
     res.type('application/xml').send(getBait('web.config'));
@@ -203,17 +213,18 @@ router.get('/wp-config.php', (req, res) => {
 
 // Docker Compose (common in CI/CD reconnaissance)
 router.get(['/docker-compose.yml', '/docker-compose.yaml', '/docker-compose.prod.yml'], (req, res) => {
-    console.log(`🍯 [Honeytoken] Docker Compose accessed from ${req.ip}`);
-    const content = HoneytokenService.generateDockerCompose();
+    console.log(`🍯 [Honeytoken] Docker Compose accessed from ${req.ip} (Tenant: ${req.tenantKeyId || 'Global'})`);
+    const content = HoneytokenService.generateDockerCompose({ apiKeyId: req.tenantKeyId });
     res.type('text/yaml').send(content);
 });
 
 // Kubernetes Secrets (high-value cloud target)
 router.get(['/k8s-secrets.yml', '/k8s-secrets.yaml', '/secrets.yaml', '/.kube/config'], (req, res) => {
-    console.log(`🍯 [Honeytoken] K8s Secrets accessed from ${req.ip}`);
-    const content = HoneytokenService.generateK8sSecrets();
+    console.log(`🍯 [Honeytoken] K8s Secrets accessed from ${req.ip} (Tenant: ${req.tenantKeyId || 'Global'})`);
+    const content = HoneytokenService.generateK8sSecrets({ apiKeyId: req.tenantKeyId });
     res.type('text/yaml').send(content);
 });
+
 
 // Fake SSH directory (extremely enticing for attackers)
 router.get(['/.ssh/authorized_keys', '/.ssh/id_rsa', '/.ssh/id_rsa.pub'], (req, res) => {

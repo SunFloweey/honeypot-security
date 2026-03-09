@@ -5,6 +5,7 @@ const path = require('path');
 const honeypot = require('./honeypot');
 
 const { requestCaptureMiddleware } = require('./honeypot/middleware/honeyLogger'); // Importa qui
+const { banMiddleware } = require('./honeypot/middleware/securityEnforcement');
 const fakeDashboard = require('./honeypot/endpoints/ai-fakedashboard'); // Verifica il percorso corretto
 const app = express();
 
@@ -18,6 +19,7 @@ app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 
 app.use(requestCaptureMiddleware);
+app.use(banMiddleware); // First line of defense
 
 // Security headers intentionally weak for honey bait
 app.use(helmet({
@@ -59,7 +61,27 @@ app.get('*', (req, res, next) => {
         return next();
     }
 
-    res.sendFile(path.join(distPath, 'index.html'));
+    const indexPath = path.join(distPath, 'index.html');
+    if (require('fs').existsSync(indexPath)) {
+        res.sendFile(indexPath);
+    } else {
+        // Fallback realistico: un finto errore di manutenzione per non rivelare il crash del server
+        res.status(404).send(`
+            <!DOCTYPE html>
+            <html>
+            <head><title>System Maintenance</title></head>
+            <body style="font-family: sans-serif; text-align: center; padding: 50px; background: #f4f4f4;">
+                <div style="background: white; padding: 40px; border-radius: 8px; display: inline-block; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                    <h1 style="color: #d9534f;">503 - System Maintenance</h1>
+                    <p>The Login Portal is currently undergoing scheduled maintenance.</p>
+                    <p style="color: #777;">Estimated completion: ${new Date(Date.now() + 3600000).toLocaleTimeString()}</p>
+                    <hr>
+                    <p style="font-size: 0.8em; color: #aaa;">Internal System ID: HONEY-SEC-402</p>
+                </div>
+            </body>
+            </html>
+        `);
+    }
 });
 
 // 404 handler

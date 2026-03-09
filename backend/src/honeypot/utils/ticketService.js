@@ -28,22 +28,24 @@ class TicketService {
 
     /**
      * Validates and CONSUMES a ticket.
+     * @returns {Object|null} The metadata associated with the ticket, or null if invalid.
      */
     validateTicket(ticketId) {
-        if (!ticketId) return false;
+        if (!ticketId) return null;
 
         const ticket = this.tickets.get(ticketId);
-        if (!ticket) return false;
+        if (!ticket) return null;
 
         // Check expiry
         if (Date.now() > ticket.expiry) {
             this.tickets.delete(ticketId);
-            return false;
+            return null;
         }
 
         // Consume (one-time use)
+        const metadata = ticket.metadata;
         this.tickets.delete(ticketId);
-        return true;
+        return metadata;
     }
 
     _cleanup() {

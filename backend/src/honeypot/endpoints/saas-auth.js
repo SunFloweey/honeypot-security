@@ -14,6 +14,8 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const User = require('../../models/User');
 const ApiKey = require('../../models/ApiKey');
+const Log = require('../../models/Log');
+const { sequelize } = require('../../config/database');
 const { adminAuthMiddleware } = require('../middleware/adminAuth');
 const provisioningService = require('../utils/provisioningService');
 
@@ -23,7 +25,7 @@ const JWT_EXPIRES_IN = '7d';
 /**
  * Middleware: Verifica JWT per rotte protette
  */
-function jwtAuth(req, res, next) {
+async function jwtAuth(req, res, next) {
     const authHeader = req.headers.authorization;
     const adminToken = req.headers['x-admin-token'];
 
@@ -42,6 +44,14 @@ function jwtAuth(req, res, next) {
     try {
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, JWT_SECRET);
+
+        // Controllo critico: l'utente è ancora attivo nel database?
+        // Facciamo una query veloce per evitare che utenti sospesi continuino a usare la dashboard
+        const userStatus = await User.findByPk(decoded.userId, { attributes: ['isActive'] });
+        if (!userStatus || !userStatus.isActive) {
+            return res.status(403).json({ success: false, error: 'Account sospeso o eliminato. Accesso negato.' });
+        }
+
         req.user = decoded;
         next();
     } catch (error) {
@@ -166,19 +176,16 @@ router.delete('/tenants/:id', adminAuthMiddleware, async (req, res) => {
         const keyIds = keys.map(k => k.id);
 
         if (keyIds.length > 0) {
-            // Usa sequelize.models per evitare problemi di importazione
-            const LogModel = sequelize.models.Log;
-            if (LogModel) {
-                // 2. Scollega i log (operazione sicura per evitare violazioni FK)
-                await LogModel.update({ apiKeyId: null }, { where: { apiKeyId: keyIds } });
-            }
-
-            // 3. Elimina le chiavi
+            // Nullifica i log per evitare violazioni di chiavi esterne (FK)
+            await Log.update({ apiKeyId: null }, { where: { apiKeyId: keyIds } });
+            // Elimina le chiavi
             await ApiKey.destroy({ where: { userId: user.id } });
         }
 
         // 4. Elimina l'utente
         await user.destroy();
+
+        console.log(`🗑️ [SaaS Admin] Cliente eliminato con successo: ${user.email} (ID: ${user.id})`);
         res.json({ success: true, message: 'Cliente e relative chiavi eliminati con successo' });
     } catch (error) {
         console.error('❌ [SaaS Delete] Errore critico:', error);

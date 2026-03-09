@@ -7,6 +7,10 @@ import { useNavigate } from 'react-router-dom';
  * Supports Login and Registration.
  */
 const SaaSAuth = () => {
+    React.useEffect(() => {
+        document.title = "ViperScan Intelligence - Auth Portal";
+    }, []);
+
     const [isLogin, setIsLogin] = useState(true);
     const [formData, setFormData] = useState({
         email: '',
@@ -40,7 +44,7 @@ const SaaSAuth = () => {
             if (data.success) {
                 localStorage.setItem('saasToken', data.token);
                 localStorage.setItem('user', JSON.stringify(data.user));
-                navigate('/real-dashboard');
+                navigate('/client-dashboard');
             } else {
                 setError(data.error || 'Autenticazione fallita.');
             }

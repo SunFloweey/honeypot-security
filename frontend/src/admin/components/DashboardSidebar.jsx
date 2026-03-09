@@ -142,15 +142,19 @@ const DashboardSidebar = ({
                 >
                     🖥️ Virtual Shells
                 </button>
-                <button
-                    className={`sidebar-link ${view === 'api_keys' ? 'active' : ''}`}
-                    onClick={() => setView('api_keys')}
-                    style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
-                >
-                    🔑 API Keys Management
-                </button>
+                
+                {/* API Keys: Solo per i clienti SaaS (per gestire i loro siti) */}
+                {!user?.isGlobal && !localStorage.getItem('adminToken') && (
+                    <button
+                        className={`sidebar-link ${view === 'api_keys' ? 'active' : ''}`}
+                        onClick={() => setView('api_keys')}
+                        style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
+                    >
+                        🔑 API Keys Management
+                    </button>
+                )}
 
-                {/* VISIBLE TO SYSTEM ADMINS & GLOBAL ADMIN */}
+                {/* Client Management: Solo per l'Admin globale (Tu) */}
                 {isAnyAdmin && (
                     <button
                         className={`sidebar-link ${view === 'tenants' ? 'active' : ''}`}

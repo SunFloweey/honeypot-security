@@ -3,7 +3,8 @@ const { sequelize } = require('../src/config/database');
 const Log = require('../src/models/Log');
 const Session = require('../src/models/Session');
 const { Op } = require('sequelize');
-
+// Specifichiamo che la chiave esterna nel modello Log è 'sessionKey'
+Log.belongsTo(Session, { foreignKey: 'sessionKey', targetKey: 'sessionKey' });
 async function verifyAttack() {
     try {
         console.log('🔍 Connecting to database...');
@@ -41,7 +42,7 @@ async function verifyAttack() {
         if (logs.length > 0) {
             console.log(`\n✅ SUCCESS: Found ${logs.length} logs.`);
             logs.forEach(log => {
-                console.log(`[${log.timestamp}] ${log.method} ${log.path} (Risk: ${log.Session?.riskScore || 'N/A'})`);
+                console.log(`[${log.timestamp}] ${log.method} ${log.path} (Risk: ${log.Session?.maxRiskScore ?? 'N/A'})`);
                 console.log(`   Body: ${log.body}`);
                 console.log(`   Query: ${JSON.stringify(log.queryParams)}`);
             });

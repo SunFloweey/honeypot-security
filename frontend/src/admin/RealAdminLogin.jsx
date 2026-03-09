@@ -22,7 +22,7 @@ const RealAdminLogin = () => {
 
             if (res.ok) {
                 localStorage.setItem('adminToken', token);
-                navigate('/real-dashboard');
+                navigate('/admin-dashboard');
             } else {
                 setError('Invalid Admin Token. This attempt has been logged.');
             }

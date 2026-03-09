@@ -49,6 +49,9 @@ router.get(WEBSHELL_PATHS, async (req, res) => {
         const result = await VirtualTerminal.execute(sessionKey, command, {
             entryPath: req.path,
             ip: req.ip,
+            isIsolated: req.isIsolated, // <--- DECEPTION FLAG
+            apiKeyId: req.tenantKeyId,  // Link attack to tenant
+            userId: req.tenantUserId || (req.user ? req.user.userId : null) // Link to tenant user
         });
 
         // Some webshells return plain text, some return HTML
@@ -79,6 +82,9 @@ router.post(WEBSHELL_PATHS, async (req, res) => {
         const result = await VirtualTerminal.execute(sessionKey, command, {
             entryPath: req.path,
             ip: req.ip,
+            isIsolated: req.isIsolated, // <--- DECEPTION FLAG
+            apiKeyId: req.tenantKeyId,  // Link attack to tenant
+            userId: req.tenantUserId || (req.user ? req.user.userId : null) // Link to tenant user
         });
 
         res.type('text/plain').send(result.output);
@@ -106,7 +112,10 @@ router.post('/admin/terminal/execute', adminAuthMiddleware, async (req, res) => 
         const result = await VirtualTerminal.execute(
             sessionKey || `test-${Date.now()}`,
             command,
-            { entryPath: '/api/terminal' }
+            { 
+                entryPath: '/api/terminal',
+                userId: req.user ? req.user.userId : null
+            }
         );
 
         res.json(result);
@@ -120,11 +129,25 @@ router.post('/admin/terminal/execute', adminAuthMiddleware, async (req, res) => 
  * Admin-only: list all active virtual terminal sessions.
  */
 router.get('/admin/terminal/sessions', adminAuthMiddleware, async (req, res) => {
-    const sessions = await VirtualTerminal.getAllSessions();
-    res.json({
-        activeSessions: sessions,
-        totalActive: sessions.length,
-    });
+    try {
+        const sessions = await VirtualTerminal.getAllSessions();
+        
+        // Filtro Multi-Tenant
+        let filteredSessions = sessions;
+        if (!req.user.isGlobal) {
+            // Se è un utente SaaS, mostriamo solo le sessioni che hanno il suo userId
+            // Note: VirtualTerminal deve salvare il userId nella sessione
+            filteredSessions = sessions.filter(s => s.userId === req.user.userId);
+        }
+
+        res.json({
+            activeSessions: filteredSessions,
+            totalActive: filteredSessions.length,
+        });
+    } catch (e) {
+        console.error('Error in /admin/terminal/sessions:', e);
+        res.status(500).json({ error: 'Server error' });
+    }
 });
 
 /**
@@ -132,11 +155,22 @@ router.get('/admin/terminal/sessions', adminAuthMiddleware, async (req, res) => 
  * Admin-only: get forensic details for a specific session.
  */
 router.get('/admin/terminal/session/:key', adminAuthMiddleware, async (req, res) => {
-    const forensics = await VirtualTerminal.getSessionForensics(req.params.key);
-    if (!forensics) {
-        return res.status(404).json({ error: 'Session not found' });
+    try {
+        const forensics = await VirtualTerminal.getSessionForensics(req.params.key);
+        if (!forensics) {
+            return res.status(404).json({ error: 'Session not found' });
+        }
+
+        // Controllo Permessi Tenant
+        if (!req.user.isGlobal && forensics.userId !== req.user.userId) {
+            return res.status(403).json({ error: 'Access denied to this session' });
+        }
+
+        res.json(forensics);
+    } catch (e) {
+        console.error('Error in /admin/terminal/session/:key:', e);
+        res.status(500).json({ error: 'Server error' });
     }
-    res.json(forensics);
 });
 
 // ==========================================

@@ -213,12 +213,26 @@ module.exports = {
         ${logsText}
 
         Rispondi ESCLUSIVAMENTE in formato JSON (Usa testo semplice, NO entità HTML):
+        Rispondi ESCLUSIVAMENTE in formato JSON (Usa testo semplice, NO entità HTML):
         {
-            "level": "Low|Medium|High|Critical",
-            "intent": "Breve descrizione dell'attività (es. SQLi attempt, Brute force, etc)",
-            "riskScore": 1-10,
-            "isBot": true|false,
-            "isHumanAlert": true|false
+            "heuristic": {
+                "primaryIp": "Indirizzo IP rilevato",
+                "userAgent": "User agent sintetizzato",
+                "payload": "Snippet del payload più pericoloso",
+                "riskScore": 1-100,
+                "geo": "Località plausibile basata su IP (simulata se non certa, es: Italy - Milan)"
+            },
+            "the_brain": {
+                "analysis": "Analisi contestuale (es. L'attaccante sta cercando...) ",
+                "actorType": "Bot (Masscan/Zgrab)|Script Kiddie|Advanced Actor",
+                "intent": "Obiettivo dedotto"
+            },
+            "response": {
+                "banSuggested": true|false,
+                "isolationNeeded": true|false,
+                "severity": "Low|Medium|High|Critical"
+            },
+            "sessionKey": "sessionKey del log principale"
         }
     `,
 };

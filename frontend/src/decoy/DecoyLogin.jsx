@@ -3,6 +3,10 @@ import { Link } from 'react-router-dom';
 import CONFIG from '../config';
 
 const DecoyLogin = () => {
+    React.useEffect(() => {
+        document.title = `Login - ${CONFIG.BRAND.NAME}`;
+    }, []);
+
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -52,7 +56,12 @@ const DecoyLogin = () => {
         <div className="flex-center">
             <div className="auth-container card">
                 <div className="text-center mb-2">
-                    <div className="nav-logo mb-1" style={{ display: 'inline-flex' }}>{CONFIG.BRAND.LOGO_LETTER}</div>
+                    <img
+                        src={CONFIG.BRAND.LOGO_IMAGE}
+                        alt={`${CONFIG.BRAND.NAME} Logo`}
+                        className="mb-1"
+                        style={{ width: '48px', height: '48px', display: 'inline-block' }}
+                    />
                     <h2 className="mb-0 text-accent">{CONFIG.BRAND.NAME}</h2>
                     <p className="text-muted font-small mt-1">Employee Login Portal</p>
                 </div>
