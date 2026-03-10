@@ -34,8 +34,8 @@ const DashboardSidebar = ({
         <aside className="dashboard-sidebar">
             <div className="sidebar-header" style={{ textAlign: 'center', marginBottom: '2.5rem', marginTop: '1rem' }}>
                 <img
-                    src="/viperscan-logo.png"
-                    alt="ViperScan Logo"
+                    src="/diana-logo.png"
+                    alt="DIANA Logo"
                     style={{
                         width: '140px',
                         height: 'auto',
@@ -54,7 +54,7 @@ const DashboardSidebar = ({
                     WebkitTextFillColor: 'transparent',
                     textShadow: '0 0 20px rgba(74, 222, 128, 0.2)'
                 }}>
-                    VIPERSCAN
+                    DIANA
                 </h2>
             </div>
 

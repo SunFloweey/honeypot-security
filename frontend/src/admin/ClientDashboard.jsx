@@ -23,7 +23,7 @@ import TerminalMonitor from './components/TerminalMonitor';
  */
 const ClientDashboard = () => {
     React.useEffect(() => {
-        document.title = "ViperScan - My Security Dashboard";
+        document.title = "DIANA - My Security Dashboard";
     }, []);
 
     const { getToken, getUser } = useAdminAuth();

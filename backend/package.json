@@ -1,7 +1,7 @@
 {
-  "name": "honeypot-security-backend",
+  "name": "diana-backend",
   "version": "1.0.0",
-  "description": "Honeypot Web App for Security Threat Detection",
+  "description": "DIANA - Deceptive Infrastructure & Analysis Network Agent",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -12,6 +12,8 @@
     "test": "jest --testTimeout=10000 --detectOpenHandles --forceExit"
   },
   "keywords": [
+    "diana",
+    "deceptive-infrastructure",
     "honeypot",
     "security",
     "threat-detection",

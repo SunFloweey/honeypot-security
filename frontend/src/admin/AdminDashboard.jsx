@@ -20,7 +20,7 @@ import TenantManager from './components/TenantManager';
 
 const AdminDashboard = () => {
     React.useEffect(() => {
-        document.title = "ViperScan Intelligence - Security Dashboard";
+        document.title = "DIANA - Security Dashboard";
     }, []);
 
     // Auth
