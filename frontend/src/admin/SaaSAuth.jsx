@@ -177,8 +177,8 @@ const SaaSAuth = () => {
             <div className="auth-card">
                 <div className="auth-header">
                     <img
-                        src="/viperscan-logo.png"
-                        alt="ViperScan Logo"
+                        src="/diana-logo.png"
+                        alt="DIANA Logo"
                         className="auth-logo-img"
                         style={{
                             width: '120px',
@@ -187,7 +187,7 @@ const SaaSAuth = () => {
                             filter: 'drop-shadow(0 0 20px rgba(16, 185, 129, 0.4))'
                         }}
                     />
-                    <h1 className="auth-title">ViperScan Intelligence</h1>
+                    <h1 className="auth-title">DIANA Intelligence</h1>
                     <p className="auth-subtitle">
                         {isLogin ? 'Accedi al portale di cyber-security' : 'Configura il tuo scudo oggi'}
                     </p>
