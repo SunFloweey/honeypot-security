@@ -44,6 +44,10 @@ app.use('/api/ai', require('./src/honeypot/endpoints/ai-analysis'));
 const { router: terminalRouter } = require('./src/honeypot/endpoints/terminal');
 app.use('/api', terminalRouter);
 
+// Mount DIANA Terminal API (Real Terminal Execution)
+const terminalOrchestratorRouter = require('./src/routes/terminal');
+app.use('/api', terminalOrchestratorRouter);
+
 // 404 handler for Admin (JSON only, no HTML fallback)
 app.use((req, res) => {
     res.status(404).json({ error: 'Not Found', path: req.path });
