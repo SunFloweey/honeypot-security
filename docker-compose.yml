@@ -36,6 +36,29 @@ services:
       db:
         condition: service_healthy
 
+  # DIANA Terminal Sandbox (Real Terminal)
+  sandbox:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.sandbox
+    restart: always
+    container_name: diana_sandbox
+    hostname: diana-server
+    networks:
+      - isolated_network
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=10m
+      - /home/sysadmin:noexec,nosuid,size=50m
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 256M
+          pids: 50
+
   # Admin Dashboard Backend (Management)
   admin:
     build:
@@ -65,6 +88,15 @@ services:
         condition: service_started
       admin:
         condition: service_started
+
+# Network isolation per sandbox
+networks:
+  isolated_network:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
 
 volumes:
   postgres_data:
