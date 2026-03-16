@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAdminAuth } from '../../hooks/useAdminAuth';
 
+/**
+ * Gestione Chiavi di Accesso DIANA
+ * Interfaccia sicura per creare e gestire le credenziali di accesso alla piattaforma
+ * Permette di controllare chiavi attive e revocare accessi non autorizzati
+ */
 const ApiKeyManager = () => {
     const { getToken, getUser } = useAdminAuth();
     const user = getUser();
@@ -90,14 +95,14 @@ const ApiKeyManager = () => {
 
     const copyToClipboard = (text) => {
         navigator.clipboard.writeText(text);
-        alert('Chiave copiata negli appunti!');
+        alert('Chiave API copiata negli appunti!');
     };
 
     return (
         <div className="api-key-manager">
             <header className="mb-2">
                 <h1>Gestione Chiavi API</h1>
-                <p className="text-muted">Utilizza queste chiavi per autenticare l'SDK nel tuo sito.</p>
+                <p className="text-muted">Utilizza queste chiavi per proteggere le tue applicazioni con il sistema DIANA.</p>
             </header>
 
             {error && <div className="tag tag-danger mb-2" style={{ padding: '0.5rem 1rem' }}>{error}</div>}
@@ -106,13 +111,13 @@ const ApiKeyManager = () => {
                 <h3 style={{ color: 'white', marginBottom: '1rem' }}>Nuova Chiave</h3>
                 {user?.isGlobal ? (
                     <div className="tag tag-info w-full" style={{ padding: '10px', fontSize: '0.85rem' }}>
-                        ℹ️ Come Super-Admin globale, non puoi generare chiavi personali. Gestisci le chiavi dei tuoi clienti nella sezione <strong>'Client Management'</strong>.
+                        ℹ️ Come Super-Admin globale, non puoi generare chiavi personali. Gestisci le chiavi dei tuoi clienti nella sezione <strong>'Gestione Clienti'</strong>.
                     </div>
                 ) : (
                     <form onSubmit={handleCreateKey} style={{ display: 'flex', gap: '10px' }}>
                         <input
                             type="text"
-                            placeholder="Nome Progetto (es. StreetCats)"
+                            placeholder="Nome Progetto (es. Negozio Online)"
                             value={newKeyName}
                             onChange={(e) => setNewKeyName(e.target.value)}
                             className="monospace"

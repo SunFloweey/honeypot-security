@@ -72,6 +72,8 @@ services:
       - PORT=4003
     ports:
       - "4003:4003"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock  # Docker socket access per sandbox
     depends_on:
       db:
         condition: service_healthy

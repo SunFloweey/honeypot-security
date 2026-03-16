@@ -132,7 +132,7 @@ const SessionDetail = ({ viewData, onBack, onSelectLog }) => {
                                 fontWeight: 900,
                                 border: '1px solid currentColor'
                             }}>
-                                AGGREGATED RISK: {analysis.riskScore || 0}/10
+                                PREVISIONI COMPORTAMENTO ED RISK: {analysis.riskScore || 0}/10
                             </div>
                         </div>
 
@@ -153,7 +153,7 @@ const SessionDetail = ({ viewData, onBack, onSelectLog }) => {
                             </div>
                         </div>
 
-                        {/* Predictive Intelligence Area */}
+                        {/* Area Analisi Predittiva */}
                         <div style={{
                             background: 'rgba(124, 58, 237, 0.05)',
                             border: '1px dashed rgba(124, 58, 237, 0.3)',

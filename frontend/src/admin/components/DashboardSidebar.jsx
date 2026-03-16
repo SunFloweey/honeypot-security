@@ -260,7 +260,7 @@ const DashboardSidebar = ({
 
                             {/* Fingerprint Intelligence */}
                             <div className="mb-1">
-                                <label className="font-tiny text-muted block mb-1">Browser Intel (Multi-IP):</label>
+                                <label className="font-tiny text-muted block mb-1">Identificativo Browser</label>
                                 <select
                                     value={fingerprintFilter}
                                     onChange={(e) => { setFingerprintFilter(e.target.value); setIpFilter(''); }}

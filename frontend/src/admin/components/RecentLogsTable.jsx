@@ -1,6 +1,22 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { sanitizeHTML } from '../../utils/sanitizer';
 
+// Funzione helper per tradurre metodi HTTP in linguaggio comprensibile
+const getMethodDescription = (method) => {
+    const methods = {
+        'GET': { icon: '', text: 'Lettura', desc: 'Stava leggendo/informazioni' },
+        'POST': { icon: '', text: 'Invio Dati', desc: 'Stava inviando dati/informazioni' },
+        'PUT': { icon: '', text: 'Aggiornamento', desc: 'Stava modificando qualcosa' },
+        'DELETE': { icon: '', text: 'Eliminazione', desc: 'Stava cercando di eliminare' },
+        'PATCH': { icon: '', text: 'Modifica', desc: 'Stava apportando modifiche' },
+        'HEAD': { icon: '', text: 'Controllo', desc: 'Stava controllando se esiste' },
+        'OPTIONS': { icon: '', text: 'Opzioni', desc: 'Stava verificando opzioni' }
+    };
+    
+    const methodInfo = methods[method] || { icon: '', text: method, desc: `Azione ${method}` };
+    return methodInfo;
+};
+
 const RecentLogsTable = ({ logs, totalLogs, currentPage, onPageChange, onInvestigate, onFilterIP, onFilterFingerprint, limit = 50, order, onToggleOrder }) => {
     const totalPages = Math.ceil(totalLogs / limit);
     const containerRef = useRef(null);
@@ -89,11 +105,11 @@ const RecentLogsTable = ({ logs, totalLogs, currentPage, onPageChange, onInvesti
                                 Timestamp {order === 'DESC' ? '▼' : '▲'}
                             </th>
                             <th>Project</th>
-                            <th>Method</th>
+                            <th>Tipo Azione</th>
                             <th>Path</th>
                             <th>Attacker IP (VPN/Proxy)</th>
                             <th>Real IP (LEAKED)</th>
-                            <th>Browser ID</th>
+                            <th>Dispositivo</th>
                             <th>Risk</th>
                             <th>Action</th>
                         </tr>
@@ -113,7 +129,9 @@ const RecentLogsTable = ({ logs, totalLogs, currentPage, onPageChange, onInvesti
                                     <td style={{ color: '#10b981', fontSize: '0.75rem' }}>
                                         {log.apiKey ? log.apiKey.name : <span className="text-muted">Internal</span>}
                                     </td>
-                                    <td style={{ color: '#fbbf24', fontWeight: 'bold' }}>{sanitizeHTML(log.method)}</td>
+                                    <td style={{ color: '#fbbf24', fontWeight: 'bold' }} title={getMethodDescription(log.method).desc}>
+                                        {getMethodDescription(log.method).icon} {getMethodDescription(log.method).text}
+                                    </td>
                                     <td className="monospace" title={log.path} style={{ color: '#60a5fa' }}>
                                         {sanitizeHTML(log.path?.substring(0, 20))}{log.path?.length > 20 ? '...' : ''}
                                     </td>

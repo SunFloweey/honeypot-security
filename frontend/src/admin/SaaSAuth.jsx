@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 /**
- * SaaSAuth Component
- * Modern, premium authentication portal for the Honeypot platform.
- * Supports Login and Registration.
+ * Portale di Accesso DIANA
+ * Gateway sicuro per la gestione della piattaforma di cyber-defense
+ * Supporta autenticazione e registrazione per operatori autorizzati
  */
 const SaaSAuth = () => {
     React.useEffect(() => {

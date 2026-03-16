@@ -4,6 +4,167 @@ import { Terminal, Shield, Loader2, Sparkles, Database, Globe, Calendar } from '
 import { sanitizeHTML, sanitizeData } from '../../utils/sanitizer';
 import { useAdminAuth } from '../../hooks/useAdminAuth';
 
+// Funzioni helper per formattazione payload comprensibile
+const formatPayloadForHumans = (payload) => {
+    if (!payload) return { formatted: 'Nessun dato', summary: 'Vuoto', suspicious: false };
+    
+    try {
+        const parsed = typeof payload === 'string' ? JSON.parse(payload) : payload;
+        const str = JSON.stringify(parsed);
+        
+        // Analizza il contenuto per capire cosa contiene
+        const analysis = analyzePayload(parsed);
+        
+        return {
+            formatted: JSON.stringify(parsed, null, 2),
+            summary: analysis.summary,
+            suspicious: analysis.suspicious,
+            type: analysis.type,
+            keyFields: analysis.keyFields
+        };
+    } catch (e) {
+        // Se non è JSON, formatta come testo normale
+        return {
+            formatted: sanitizeHTML(String(payload)),
+            summary: getTextSummary(String(payload)),
+            suspicious: isSuspiciousText(String(payload)),
+            type: 'text',
+            keyFields: []
+        };
+    }
+};
+
+const analyzePayload = (data) => {
+    const summary = [];
+    const keyFields = [];
+    let suspicious = false;
+    let type = 'unknown';
+    
+    // Analizza i tipi di dati comuni
+    if (data.username || data.user || data.email) {
+        type = 'credentials';
+        summary.push('🔑 Credenziali utente');
+        keyFields.push('username', 'user', 'email', 'password');
+        suspicious = true;
+    }
+    
+    if (data.api_key || data.token || data.key) {
+        type = 'api_keys';
+        summary.push('🔐 Chiavi API/Token');
+        keyFields.push('api_key', 'token', 'key');
+        suspicious = true;
+    }
+    
+    if (data.command || data.cmd || data.exec) {
+        type = 'command';
+        summary.push('⚡ Comandi eseguiti');
+        keyFields.push('command', 'cmd', 'exec');
+        suspicious = true;
+    }
+    
+    if (data.sql || data.query || data.select) {
+        type = 'database';
+        summary.push('🗄️ Query database');
+        keyFields.push('sql', 'query', 'select');
+        suspicious = true;
+    }
+    
+    if (data.file || data.upload || data.filename) {
+        type = 'file_upload';
+        summary.push('📁 Upload file');
+        keyFields.push('file', 'upload', 'filename');
+        suspicious = true;
+    }
+    
+    // Controlla pattern sospetti
+    const str = JSON.stringify(data).toLowerCase();
+    if (str.includes('password') || str.includes('secret') || str.includes('admin')) {
+        suspicious = true;
+        summary.push('⚠️ Dati sensibili');
+    }
+    
+    if (str.includes('union select') || str.includes('drop table') || str.includes('delete from')) {
+        suspicious = true;
+        summary.push('🚨 SQL Injection');
+    }
+    
+    if (str.includes('eval(') || str.includes('system(') || str.includes('exec(')) {
+        suspicious = true;
+        summary.push('💥 Code Injection');
+    }
+    
+    return {
+        summary: summary.length > 0 ? summary.join(' | ') : '📄 Dati generici',
+        suspicious,
+        type,
+        keyFields
+    };
+};
+
+const getTextSummary = (text) => {
+    const lower = text.toLowerCase();
+    const summary = [];
+    
+    if (lower.includes('password') || lower.includes('secret')) {
+        summary.push('🔑 Contiene credenziali');
+    }
+    
+    if (lower.includes('admin') || lower.includes('root')) {
+        summary.push('👤 Accesso privilegiato');
+    }
+    
+    if (lower.includes('select') || lower.includes('union')) {
+        summary.push('🗄️ Query SQL');
+    }
+    
+    if (lower.includes('eval') || lower.includes('exec')) {
+        summary.push('⚡ Comandi sistema');
+    }
+    
+    return summary.length > 0 ? summary.join(' | ') : `📝 Testo (${text.length} caratteri)`;
+};
+
+const isSuspiciousText = (text) => {
+    const suspicious = [
+        'password', 'secret', 'admin', 'root', 'union select', 
+        'drop table', 'eval(', 'system(', 'exec(', '<script',
+        'javascript:', 'data:', 'vbscript:'
+    ];
+    
+    return suspicious.some(pattern => text.toLowerCase().includes(pattern));
+};
+
+const formatHeadersForHumans = (headers) => {
+    if (!headers) return { formatted: {}, summary: 'Nessun header' };
+    
+    const importantHeaders = {
+        'user-agent': '🌐 Browser/Client',
+        'authorization': '🔑 Autenticazione',
+        'content-type': '📄 Tipo contenuto',
+        'x-forwarded-for': '🌍 IP Proxy',
+        'cookie': '🍪 Cookie sessione',
+        'referer': '🔗 Provenienza'
+    };
+    
+    const formatted = {};
+    const summary = [];
+    
+    Object.entries(headers).forEach(([key, value]) => {
+        const importantKey = importantHeaders[key.toLowerCase()];
+        if (importantKey) {
+            formatted[key] = value;
+            summary.push(importantKey);
+        } else {
+            formatted[key] = value;
+        }
+    });
+    
+    return {
+        formatted: JSON.stringify(formatted, null, 2),
+        summary: summary.length > 0 ? summary.join(' | ') : '📋 Headers standard'
+    };
+};
+
 const LogDetailModal = ({ log, onClose }) => {
     const [analysis, setAnalysis] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -151,9 +312,9 @@ const LogDetailModal = ({ log, onClose }) => {
                             <div style={{ color: '#c084fc', marginBottom: '12px' }}>
                                 <Sparkles size={32} style={{ margin: '0 auto' }} />
                             </div>
-                            <h3 style={{ margin: '0 0 8px 0', color: '#e2e8f0' }}>Analyze this payload with AI?</h3>
+                            <h3 style={{ margin: '0 0 8px 0', color: '#e2e8f0' }}>Analizza questa richiesta con AI?</h3>
                             <p style={{ margin: '0 0 20px 0', color: '#94a3b8', fontSize: '0.9rem' }}>
-                                Our threat intelligence engine can de-obfuscate this request, extract IOCs, and explain the attacker's intent.
+                                Il nostro motore può analizzare questa richiesta, estrarre indicatori di minaccia e spiegare le intenzioni dell'attaccante.
                             </p>
                             <button
                                 onClick={handleAnalyze}
@@ -194,42 +355,87 @@ const LogDetailModal = ({ log, onClose }) => {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                         <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase' }}>
-                                <Database size={14} /> Request Body
+                                <Database size={14} /> Dati Inviati
                             </div>
-                            <div style={{
-                                background: '#020617',
-                                padding: '16px',
-                                borderRadius: '12px',
-                                border: '1px solid rgba(148, 163, 184, 0.1)',
-                                color: '#6ee7b7',
-                                fontFamily: '"Fira Code", monospace',
-                                fontSize: '0.85rem',
-                                minHeight: '150px',
-                                whiteSpace: 'pre-wrap',
-                                wordBreak: 'break-all',
-                                overflowY: 'auto'
-                            }}>
-                                {typeof log.body === 'string' ? sanitizeHTML(log.body) : JSON.stringify(sanitizeData(log.body), null, 2)}
-                            </div>
+                            
+                            {/* Summary del payload */}
+                            {(() => {
+                                const payloadAnalysis = formatPayloadForHumans(log.body);
+                                return (
+                                    <>
+                                        <div style={{
+                                            background: payloadAnalysis.suspicious ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                                            padding: '8px 12px',
+                                            borderRadius: '6px',
+                                            marginBottom: '8px',
+                                            fontSize: '0.8rem',
+                                            color: payloadAnalysis.suspicious ? '#f87171' : '#4ade80',
+                                            fontWeight: 600,
+                                            border: payloadAnalysis.suspicious ? '1px solid rgba(239, 68, 68, 0.2)' : '1px solid rgba(16, 185, 129, 0.2)'
+                                        }}>
+                                            {payloadAnalysis.suspicious && <AlertTriangle size={12} style={{ marginRight: '4px', display: 'inline' }} />}
+                                            {payloadAnalysis.summary}
+                                        </div>
+                                        
+                                        <div style={{
+                                            background: '#020617',
+                                            padding: '16px',
+                                            borderRadius: '12px',
+                                            border: '1px solid rgba(148, 163, 184, 0.1)',
+                                            color: '#6ee7b7',
+                                            fontFamily: '"Fira Code", monospace',
+                                            fontSize: '0.85rem',
+                                            minHeight: '150px',
+                                            whiteSpace: 'pre-wrap',
+                                            wordBreak: 'break-all',
+                                            overflowY: 'auto'
+                                        }}>
+                                            {payloadAnalysis.formatted}
+                                        </div>
+                                    </>
+                                );
+                            })()}
                         </div>
                         <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase' }}>
-                                <Shield size={14} /> HTTP Headers
+                                <Shield size={14} /> Headers HTTP
                             </div>
-                            <div style={{
-                                background: '#020617',
-                                padding: '16px',
-                                borderRadius: '12px',
-                                border: '1px solid rgba(148, 163, 184, 0.1)',
-                                color: '#94a3b8',
-                                fontFamily: '"Fira Code", monospace',
-                                fontSize: '0.8rem',
-                                minHeight: '150px',
-                                whiteSpace: 'pre-wrap',
-                                overflowY: 'auto'
-                            }}>
-                                {JSON.stringify(sanitizeData(log.headers), null, 2)}
-                            </div>
+                            
+                            {/* Summary degli headers */}
+                            {(() => {
+                                const headersAnalysis = formatHeadersForHumans(log.headers);
+                                return (
+                                    <>
+                                        <div style={{
+                                            background: 'rgba(59, 130, 246, 0.1)',
+                                            padding: '8px 12px',
+                                            borderRadius: '6px',
+                                            marginBottom: '8px',
+                                            fontSize: '0.8rem',
+                                            color: '#60a5fa',
+                                            fontWeight: 600,
+                                            border: '1px solid rgba(59, 130, 246, 0.2)'
+                                        }}>
+                                            {headersAnalysis.summary}
+                                        </div>
+                                        
+                                        <div style={{
+                                            background: '#020617',
+                                            padding: '16px',
+                                            borderRadius: '12px',
+                                            border: '1px solid rgba(148, 163, 184, 0.1)',
+                                            color: '#94a3b8',
+                                            fontFamily: '"Fira Code", monospace',
+                                            fontSize: '0.8rem',
+                                            minHeight: '150px',
+                                            whiteSpace: 'pre-wrap',
+                                            overflowY: 'auto'
+                                        }}>
+                                            {headersAnalysis.formatted}
+                                        </div>
+                                    </>
+                                );
+                            })()}
                         </div>
                     </div>
 
@@ -237,23 +443,64 @@ const LogDetailModal = ({ log, onClose }) => {
                     {Object.keys(log.query || {}).length > 0 && (
                         <div style={{ marginTop: '20px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase' }}>
-                                <Globe size={14} /> Query Parameters
+                                <Globe size={14} /> Parametri Query
                             </div>
-                            <div style={{
-                                display: 'flex',
-                                flexWrap: 'wrap',
-                                gap: '8px',
-                                background: 'rgba(15, 23, 42, 0.4)',
-                                padding: '12px',
-                                borderRadius: '8px'
-                            }}>
-                                {Object.entries(log.query).map(([key, val]) => (
-                                    <div key={key} style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '6px 12px', borderRadius: '4px', border: '1px solid rgba(148, 163, 184, 0.1)' }}>
-                                        <span style={{ color: '#a855f7', fontWeight: 700, fontSize: '0.8rem' }}>{key}:</span>
-                                        <span style={{ color: '#e2e8f0', fontSize: '0.8rem', marginLeft: '6px' }}>{String(val)}</span>
-                                    </div>
-                                ))}
-                            </div>
+                            
+                            {/* Summary dei query params */}
+                            {(() => {
+                                const queryParamsAnalysis = formatPayloadForHumans(log.query);
+                                return (
+                                    <>
+                                        <div style={{
+                                            background: queryParamsAnalysis.suspicious ? 'rgba(245, 158, 11, 0.1)' : 'rgba(34, 197, 94, 0.1)',
+                                            padding: '8px 12px',
+                                            borderRadius: '6px',
+                                            marginBottom: '8px',
+                                            fontSize: '0.8rem',
+                                            color: queryParamsAnalysis.suspicious ? '#f59e0b' : '#22c55e',
+                                            fontWeight: 600,
+                                            border: queryParamsAnalysis.suspicious ? '1px solid rgba(245, 158, 11, 0.2)' : '1px solid rgba(34, 197, 94, 0.2)'
+                                        }}>
+                                            {queryParamsAnalysis.suspicious && <AlertTriangle size={12} style={{ marginRight: '4px', display: 'inline' }} />}
+                                            {queryParamsAnalysis.summary}
+                                        </div>
+                                        
+                                        <div style={{
+                                            display: 'flex',
+                                            flexWrap: 'wrap',
+                                            gap: '8px',
+                                            background: 'rgba(15, 23, 42, 0.4)',
+                                            padding: '12px',
+                                            borderRadius: '8px'
+                                        }}>
+                                            {Object.entries(log.query).map(([key, val]) => (
+                                                <div key={key} style={{ 
+                                                    background: queryParamsAnalysis.keyFields.includes(key) ? 'rgba(239, 68, 68, 0.1)' : 'rgba(30, 41, 59, 0.6)', 
+                                                    padding: '6px 12px', 
+                                                    borderRadius: '4px', 
+                                                    border: queryParamsAnalysis.keyFields.includes(key) ? '1px solid rgba(239, 68, 68, 0.2)' : '1px solid rgba(148, 163, 184, 0.1)' 
+                                                }}>
+                                                    <span style={{ 
+                                                        color: queryParamsAnalysis.keyFields.includes(key) ? '#f87171' : '#a855f7', 
+                                                        fontWeight: 700, 
+                                                        fontSize: '0.8rem' 
+                                                    }}>
+                                                        {key}:
+                                                    </span>
+                                                    <span style={{ 
+                                                        color: queryParamsAnalysis.keyFields.includes(key) ? '#fca5a5' : '#e2e8f0', 
+                                                        fontSize: '0.8rem', 
+                                                        marginLeft: '6px',
+                                                        wordBreak: 'break-all'
+                                                    }}>
+                                                        {String(val).length > 50 ? String(val).substring(0, 50) + '...' : String(val)}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </>
+                                );
+                            })()}
                         </div>
                     )}
                 </div>

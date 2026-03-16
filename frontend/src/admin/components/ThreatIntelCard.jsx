@@ -36,7 +36,7 @@ const ThreatIntelCard = ({ intel, rawPayload }) => {
                         letterSpacing: '0.1em',
                         margin: 0,
                     }}>
-                        AI Threat Intelligence Report
+                        AI Report Analisi Minacce
                     </h3>
                     {intel.analysis_source && (
                         <span style={{

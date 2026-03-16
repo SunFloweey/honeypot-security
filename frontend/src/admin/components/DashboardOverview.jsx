@@ -8,8 +8,8 @@ const DashboardOverview = ({ stats, logs, totalLogs, currentPage, onPageChange, 
     return (
         <>
             <header className="mb-2">
-                <h1>Research Dashboard</h1>
-                <p className="text-muted">Analisi forense globale (Dati completi)</p>
+                <h1>Centro di Controllo Sicurezza</h1>
+                <p className="text-muted">Panoramica completa delle minacce e attività di difesa</p>
             </header>
 
             <div className="grid-adaptive mb-2">
@@ -23,9 +23,9 @@ const DashboardOverview = ({ stats, logs, totalLogs, currentPage, onPageChange, 
                         animation: 'fadeIn 0.5s ease-out'
                     }}>
                         <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🛡️</div>
-                        <h2 style={{ color: 'var(--researcher-green)', marginBottom: '1rem' }}>Welcome to ViperScan</h2>
+                        <h2 style={{ color: 'var(--researcher-green)', marginBottom: '1rem' }}>Benvenuto in DIANA</h2>
                         <p style={{ maxWidth: '600px', margin: '0 auto', color: '#94a3b8', lineHeight: '1.6' }}>
-                            Your security dashboard is currently empty. This is perfectly normal if your honeypots haven't been attacked yet!
+                            Il tuo centro di controllo è pronto. È normale che non ci siano ancora attività rilevate se i sistemi di difesa sono stati appena attivati!
                         </p>
                         <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'center', gap: '2rem' }}>
                             <div style={{ textAlign: 'left' }}>
@@ -44,12 +44,14 @@ const DashboardOverview = ({ stats, logs, totalLogs, currentPage, onPageChange, 
                     </div>
                 )}
                 <div className="card terminal-card">
-                    <small className="text-muted font-bold">TOTAL REQUESTS</small>
+                    <small className="text-muted font-bold">RICHIESTE TOTALI</small>
                     <div className="mt-1 font-h1 font-bold text-researcher">{stats?.summary?.totalLogs}</div>
+                    <div className="mt-1 font-tiny text-muted" style={{ fontSize: '0.7rem' }}>Tutti gli accessi rilevati</div>
                 </div>
                 <div className="card terminal-card">
-                    <small className="text-muted font-bold">UNIQUE SESSIONS</small>
+                    <small className="text-muted font-bold">SESSIONI UNICHE</small>
                     <div className="mt-1 font-h1 font-bold">{stats?.summary?.totalSessions}</div>
+                    <div className="mt-1 font-tiny text-muted" style={{ fontSize: '0.7rem' }}>Visitatori distinti</div>
                 </div>
 
                 {/* Live AI Analysis Card */}
@@ -61,7 +63,7 @@ const DashboardOverview = ({ stats, logs, totalLogs, currentPage, onPageChange, 
                     minWidth: '250px'
                 }}>
                     <div className="flex justify-between items-start">
-                        <small className="text-muted font-bold">LIVE AI INTENT</small>
+                        <small className="text-muted font-bold">ANALISI MINACCE</small>
                         {liveAnalysis && (
                             <span className="font-tiny" style={{
                                 padding: '2px 6px',
@@ -69,7 +71,7 @@ const DashboardOverview = ({ stats, logs, totalLogs, currentPage, onPageChange, 
                                 borderRadius: '10px',
                                 color: liveAnalysis.isBot ? '#94a3b8' : '#10b981'
                             }}>
-                                {liveAnalysis.isBot ? '🤖 BOT' : '👤 HUMAN?'}
+                                {liveAnalysis.isBot ? '🤖 AUTOMATICO' : '👤 UMANO'}
                             </span>
                         )}
                     </div>
@@ -82,8 +84,8 @@ const DashboardOverview = ({ stats, logs, totalLogs, currentPage, onPageChange, 
                     </div>
                     {liveAnalysis && (
                         <div className="mt-1 font-tiny text-muted">
-                            Risk: <span style={{ color: liveAnalysis.riskScore > 7 ? '#ef4444' : '#fff' }}>{liveAnalysis.riskScore}/10</span>
-                            {liveAnalysis.isHumanAlert && <span className="ml-1" style={{ color: '#ef4444' }}>⚠️ DETECTED ANOMALY</span>}
+                            Pericolo: <span style={{ color: liveAnalysis.riskScore > 7 ? '#ef4444' : '#fff' }}>{liveAnalysis.riskScore}/10</span>
+                            {liveAnalysis.isHumanAlert && <span className="ml-1" style={{ color: '#ef4444' }}>⚠️ COMPORTAMENTO SOSPETTO</span>}
                         </div>
                     )}
                 </div>
@@ -91,7 +93,7 @@ const DashboardOverview = ({ stats, logs, totalLogs, currentPage, onPageChange, 
 
             {/* Traffic Trend Chart (Line Chart) */}
             <section className="mb-2">
-                <h3 className="mb-1" style={{ color: 'white' }}>Traffic Trend (All History)</h3>
+                <h3 className="mb-1" style={{ color: 'white' }}>Andamento Traffico</h3>
                 <div className="card terminal-card" style={{ height: '250px', position: 'relative' }}>
                     <ResponsiveContainer width="100%" height="100%" debounce={50}>
                         <AreaChart data={stats?.timeSeries || []} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
@@ -116,7 +118,7 @@ const DashboardOverview = ({ stats, logs, totalLogs, currentPage, onPageChange, 
 
             <div className="grid-2-col mb-2">
                 <section>
-                    <h3 className="mb-1" style={{ color: 'white' }}>Attack Distribution</h3>
+                    <h3 className="mb-1" style={{ color: 'white' }}>Tipi di Attacco</h3>
                     <div className="card terminal-card" style={{ height: '300px', position: 'relative' }}>
                         {stats?.attacks && stats.attacks.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%" debounce={50}>
@@ -147,7 +149,7 @@ const DashboardOverview = ({ stats, logs, totalLogs, currentPage, onPageChange, 
                 </section>
 
                 <section>
-                    <h3 className="mb-1" style={{ color: 'white' }}>Browser Intelligence (Multi-IP)</h3>
+                    <h3 className="mb-1" style={{ color: 'white' }}>Dispositivi Rilevati</h3>
                     <div className="card terminal-card" style={{ padding: '0', height: '300px', overflowY: 'auto' }}>
                         {stats?.topFingerprints && stats.topFingerprints.length > 0 ? (
                             stats.topFingerprints.map(fp => (
