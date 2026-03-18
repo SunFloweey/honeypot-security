@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const HoneytokenService = require('../../services/honeytokenService');
 const AIService = require('../../services/aiService');
+const IntrusionResponseService = require('../../services/intrusionResponseService');
 const logQueue = require('../utils/logQueue');
 const crypto = require('crypto');
 const ApiKey = require('../../models/ApiKey');
@@ -139,6 +140,28 @@ router.post('/analyze', async (req, res) => {
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
+});
+
+/**
+ * POST /api/v1/sdk/evacuate
+ * Triggers the Intrusion Response Evacuation Chain manually via SDK.
+ * Only accessible with a valid API key.
+ */
+router.post('/evacuate', async (req, res) => {
+    const { reason } = req.body;
+    const appName = req.headers['x-app-name'] || 'SDK-Client';
+
+    console.log(`📡 [SDK] Trigger di evacuazione richiesto da: ${appName}`);
+
+    // Avvia la catena in background per non bloccare la risposta HTTP
+    IntrusionResponseService.secureEvacuationChain(`SDK Trigger: ${reason || 'Manual activation'} (App: ${appName})`)
+        .catch(err => console.error('❌ [SDK Evacuation Error]:', err));
+
+    res.json({ 
+        success: true, 
+        message: 'Evacuation chain triggered successfully. Data protection in progress.',
+        status: 'PROTECTION_STARTED'
+    });
 });
 
 module.exports = router;

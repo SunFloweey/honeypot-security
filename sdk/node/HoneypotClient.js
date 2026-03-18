@@ -77,6 +77,21 @@ class HoneypotClient {
             return { success: false, error: error.message };
         }
     }
+
+    /**
+     * Trigger the immediate data evacuation and protection chain.
+     * WARNING: This will encrypt and delete sensitive files on the honeypot server.
+     * @param {string} reason - The reason for manual evacuation
+     */
+    async triggerEvacuation(reason = 'Manual SDK Trigger') {
+        try {
+            const response = await this.client.post('/evacuate', { reason });
+            return response.data;
+        } catch (error) {
+            console.error('Honeypot SDK Evacuation Error:', error.response?.data || error.message);
+            return { success: false, error: error.message };
+        }
+    }
 }
 
 module.exports = HoneypotClient;

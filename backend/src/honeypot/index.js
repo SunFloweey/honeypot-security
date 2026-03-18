@@ -3,7 +3,7 @@ const express = require('express');
 const { requestCaptureMiddleware: honeyLoggerMiddleware } = require('./middleware/honeyLogger');
 const { responseDelayMiddleware, adaptiveDelayMiddleware } = require('./middleware/responseDelay');
 const { adaptiveDecoyMiddleware } = require('./middleware/adaptiveDecoy');
-const { isolationMiddleware } = require('./middleware/securityEnforcement');
+const { isolationMiddleware, canaryMiddleware } = require('./middleware/securityEnforcement');
 
 // Import endpoint routers
 const authEndpoints = require('./endpoints/auth');
@@ -35,6 +35,9 @@ router.use((req, res, next) => {
 // ==========================================
 // MIDDLEWARE GLOBALI HONEYPOT (ATTACKERS ONLY)
 // ==========================================
+
+// 0. CANARY – rileva accesso a file/path reali e attiva Auto-Protezione
+router.use(canaryMiddleware);
 
 // 1. Simula latenza realistica (Solo per rotte non gestite sopra)
 router.use(responseDelayMiddleware);

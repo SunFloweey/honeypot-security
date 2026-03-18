@@ -44,3 +44,16 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# ================================
+# SICUREZZA - Auto-Protezione PKI
+# ================================
+# Chiave privata RSA (NON committare MAI!)
+secure_vault_keys/
+private_key.pem
+
+# Directory vault con i blob cifrati
+secure_vault/
+
+# Chiavi RSA nei moduli
+*.pem

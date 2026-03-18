@@ -28,7 +28,11 @@ services:
     environment:
       - DB_HOST=db
       - PORT=4002
+      - VAULT_HOST=admin
+      - VAULT_PORT=4003
     volumes:
+      - ./secure_vault_keys:/app/secure_vault_keys
+      - ./vault_storage:/app/secure_vault
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "4002:4002"
@@ -73,7 +77,9 @@ services:
     ports:
       - "4003:4003"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock  # Docker socket access per sandbox
+      - ./secure_vault_keys:/app/secure_vault_keys
+      - ./vault_storage:/app/secure_vault
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       db:
         condition: service_healthy
@@ -102,3 +108,5 @@ networks:
 
 volumes:
   postgres_data:
+  vault_data:
+  vault_keys:

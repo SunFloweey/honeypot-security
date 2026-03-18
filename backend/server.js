@@ -11,6 +11,16 @@ const threatCache = require('./src/honeypot/utils/threatCache');
 const logQueue = require('./src/honeypot/utils/logQueue');
 
 const PORT = process.env.HONEYPOT_PORT || 4001;
+const dgram = require('dgram');
+const udpClient = dgram.createSocket('udp4');
+const HEARTBEAT_PORT = 4005;
+
+const sendHeartbeat = (msg = 'HEARTBEAT_OK') => {
+    const buffer = Buffer.from(msg);
+    udpClient.send(buffer, 0, buffer.length, HEARTBEAT_PORT, 'localhost', (err) => {
+        if (err) console.error('⚠️ [Heartbeat] Errore invio segnale al Guardian:', err.message);
+    });
+};
 
 const httpServer = http.createServer(app);
 const io = new Server(httpServer, {
@@ -137,6 +147,8 @@ async function bootstrap() {
 ║   Status: LISTENING FOR THREATS        ║
 ╚════════════════════════════════════════╝
           `);
+            // Avvia Heartbeat per il Guardian Daemon
+            setInterval(sendHeartbeat, 2000);
         });
     } catch (error) {
         console.error('❌ FATAL: Bootstrap sequence failed');
@@ -149,6 +161,9 @@ bootstrap();
 
 async function gracefulShutdown(signal) {
     console.log(`\n🛑 ${signal} ricevuto. Inizio procedura di spegnimento...`);
+    
+    // Avvisa il Guardian che lo spegnimento è autorizzato
+    sendHeartbeat('SHUTDOWN_OK');
 
     if (httpServer) {
         httpServer.close(async () => {

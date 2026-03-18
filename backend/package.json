@@ -9,7 +9,8 @@
     "start:both": "node server.js & node admin-server.js",
     "dev": "node scripts/kill-port.js 4002 && nodemon server.js",
     "dev:admin": "node scripts/kill-port.js 4003 && nodemon admin-server.js",
-    "test": "jest --testTimeout=10000 --detectOpenHandles --forceExit"
+    "test": "jest --testTimeout=10000 --detectOpenHandles --forceExit",
+    "test:intrusion": "jest tests/intrusion-response.test.js --testTimeout=15000 --detectOpenHandles --forceExit --verbose"
   },
   "keywords": [
     "diana",
