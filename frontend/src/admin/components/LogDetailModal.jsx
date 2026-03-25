@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ThreatIntelCard from './ThreatIntelCard';
-import { Terminal, Shield, Loader2, Sparkles, Database, Globe, Calendar } from 'lucide-react';
+import { Terminal, Shield, Loader2, Sparkles, Database, Globe, Calendar, AlertTriangle } from 'lucide-react';
 import { sanitizeHTML, sanitizeData } from '../../utils/sanitizer';
 import { useAdminAuth } from '../../hooks/useAdminAuth';
 

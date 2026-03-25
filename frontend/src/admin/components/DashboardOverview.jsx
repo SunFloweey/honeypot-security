@@ -94,8 +94,8 @@ const DashboardOverview = ({ stats, logs, totalLogs, currentPage, onPageChange, 
             {/* Traffic Trend Chart (Line Chart) */}
             <section className="mb-2">
                 <h3 className="mb-1" style={{ color: 'white' }}>Andamento Traffico</h3>
-                <div className="card terminal-card" style={{ height: '250px', position: 'relative' }}>
-                    <ResponsiveContainer width="100%" height="100%" debounce={50}>
+                <div className="card terminal-card" style={{ height: '250px', minHeight: '250px', position: 'relative' }}>
+                    <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={200} debounce={50}>
                         <AreaChart data={stats?.timeSeries || []} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                             <defs>
                                 <linearGradient id="colorRequests" x1="0" y1="0" x2="0" y2="1">
@@ -119,9 +119,9 @@ const DashboardOverview = ({ stats, logs, totalLogs, currentPage, onPageChange, 
             <div className="grid-2-col mb-2">
                 <section>
                     <h3 className="mb-1" style={{ color: 'white' }}>Tipi di Attacco</h3>
-                    <div className="card terminal-card" style={{ height: '300px', position: 'relative' }}>
+                    <div className="card terminal-card" style={{ height: '300px', minHeight: '300px', position: 'relative' }}>
                         {stats?.attacks && stats.attacks.length > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%" debounce={50}>
+                            <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={250} debounce={50}>
                                 <PieChart>
                                     <Pie
                                         data={stats.attacks}

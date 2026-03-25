@@ -33,6 +33,7 @@ services:
     volumes:
       - ./secure_vault_keys:/app/secure_vault_keys
       - ./vault_storage:/app/secure_vault
+      - ./sdk:/app/sdk
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "4002:4002"

@@ -80,6 +80,23 @@ router.use('/api', apiEndpoints);          // Public bait (/api/users, etc.)
 
 // 2. PROTECTED ADMIN ROUTES (Auth Required)
 router.use('/api/ai', adminAuthMiddleware, aiAnalysisEndpoints);
+
+// Endpoint di check accessibile per monitoraggio (Evita 401 Unauthorized che blocca il frontend)
+router.get('/api/db-check', async (req, res) => {
+    try {
+        const { Log } = require('../../models');
+        const count = await Log.count();
+        res.json({ 
+            success: true, 
+            status: 'connected', 
+            logs: count 
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: 'Database unavailable' });
+    }
+});
+
+// Tutte le altre rotte dashboard richiedono auth admin/saas
 router.use('/api', adminAuthMiddleware, dashboardEndpoints);
 
 

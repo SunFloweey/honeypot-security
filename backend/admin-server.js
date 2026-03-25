@@ -107,6 +107,7 @@ app.use(adminAuthMiddleware);
 
 // Mount dashboard API (Include le notifiche interne /api/internal/notify)
 app.use('/api', dashboardEndpoints);
+app.use('/api', require('./src/honeypot/endpoints/saas-auth').router); // <--- CORRETTO: Gestione Client SaaS
 app.use('/api/ai', require('./src/honeypot/endpoints/ai-analysis'));
 
 // Mount terminal forensics API
@@ -171,7 +172,11 @@ async function startAdminServer() {
     try {
         // Test DB connection
         await sequelize.authenticate();
-        await sequelize.sync({ alter: true }); // Sync models to DB (adds BannedIP table)
+        try {
+            await sequelize.sync(); // Sync models to DB (adds BannedIP table)
+        } catch(err) {
+            console.warn('⚠️ Admin Server DB Sync warning:', err.message);
+        }
         console.log('✅ Admin Server: PostgreSQL connection established and synced');
 
         const notificationService = require('./src/honeypot/utils/notificationService');

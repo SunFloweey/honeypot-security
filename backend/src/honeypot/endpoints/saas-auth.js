@@ -18,6 +18,7 @@ const Log = require('../../models/Log');
 const { sequelize } = require('../../config/database');
 const { adminAuthMiddleware } = require('../middleware/adminAuth');
 const provisioningService = require('../utils/provisioningService');
+const SdkBundleService = require('../utils/sdkBundleService');
 
 const JWT_SECRET = process.env.JWT_SECRET || process.env.ADMIN_TOKEN;
 const JWT_EXPIRES_IN = '7d';
@@ -224,7 +225,13 @@ router.post('/login', async (req, res) => {
         }
 
         const token = jwt.sign(
-            { userId: user.id, email: user.email, role: user.role },
+            { 
+                sub: user.id, 
+                userId: user.id, // Retrocompatibilità
+                email: user.email, 
+                role: user.role,
+                scope: user.role === 'admin' ? ['admin:all'] : ['monitor:write', 'tunnel:access']
+            },
             JWT_SECRET,
             { expiresIn: JWT_EXPIRES_IN }
         );
@@ -343,6 +350,179 @@ router.delete('/keys/:id', jwtAuth, async (req, res) => {
     } catch (error) {
         console.error('❌ [SaaS Auth] Errore revoca chiave:', error.message);
         res.status(500).json({ success: false, error: 'Errore interno del server' });
+    }
+});
+
+/**
+ * GET /sdk-config - Restituisce lo snippet pre-configurato per il client
+ */
+router.get('/sdk-config', jwtAuth, async (req, res) => {
+    try {
+        const apiKey = await ApiKey.findOne({
+            where: { userId: req.user.userId, isActive: true },
+            order: [['createdAt', 'DESC']]
+        });
+
+        if (!apiKey) {
+            return res.status(404).json({ success: false, error: 'Nessuna chiave API attiva trovata' });
+        }
+
+        // Determina la baseUrl dinamicamente in base a come l'utente accede alla dashboard
+        // Se accede via localhost:5173 (frontend), il backend risponde su 4002/4003.
+        // Dobbiamo assicurarci che l'SDK punti alla porta dell'Honeypot (4002)
+        const protocol = req.protocol;
+        const host = req.get('host').split(':')[0]; // Prendi l'IP/Host senza porta
+        const baseUrl = process.env.BASE_URL || `${protocol}://${host}:4002`;
+        
+        const configSnippet = `/**
+ * DIANA Honeypot Configuration
+ * Generato automaticamente per: ${apiKey.name}
+ */
+const HoneypotClient = require('./sdk/node/HoneypotClient');
+
+const diana = new HoneypotClient({
+    apiKey: '${apiKey.key}',
+    baseUrl: '${baseUrl}',
+    appName: '${apiKey.name}'
+});
+
+module.exports = diana;`;
+
+        res.json({
+            success: true,
+            apiKey: apiKey.key,
+            projectName: apiKey.name,
+            baseUrl: baseUrl,
+            snippet: configSnippet
+        });
+
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * GET /sdk-frameworks - Restituisce la lista dei framework supportati dall'SDK
+ */
+router.get('/sdk-frameworks', jwtAuth, (req, res) => {
+    const frameworks = SdkBundleService.FRAMEWORKS;
+    const result = Object.entries(frameworks).map(([key, val]) => ({
+        id: key,
+        label: val.label,
+        icon: val.icon
+    }));
+    res.json({ success: true, frameworks: result });
+});
+
+/**
+ * GET /sdk-verify - Verifica se l'SDK di un client è connesso
+ * Controlla se ci sono log recenti dalla chiave API attiva
+ */
+router.get('/sdk-verify', jwtAuth, async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    try {
+        const apiKeyRecord = await ApiKey.findOne({
+            where: { userId: req.user.userId, isActive: true },
+            order: [['createdAt', 'DESC']]
+        });
+
+        if (!apiKeyRecord) {
+            return res.json({ success: true, connected: false, reason: 'no_api_key' });
+        }
+
+        // Controlla se ci sono log recenti (ultimi 5 minuti)
+        const { Op } = require('sequelize');
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+        
+        const recentLogs = await Log.count({
+            where: {
+                apiKeyId: apiKeyRecord.id,
+                timestamp: { [Op.gte]: fiveMinutesAgo }
+            }
+        });
+
+        // Controlla anche lastUsedAt della chiave
+        const lastUsed = apiKeyRecord.lastUsedAt;
+        const isRecentlyUsed = lastUsed && (Date.now() - new Date(lastUsed).getTime()) < 5 * 60 * 1000;
+
+        res.json({
+            success: true,
+            connected: recentLogs > 0 || isRecentlyUsed,
+            recentLogs,
+            lastUsedAt: lastUsed,
+            apiKeyName: apiKeyRecord.name
+        });
+    } catch (error) {
+        console.error('❌ [SDK Verify] Errore:', error.message);
+        res.json({ success: true, connected: false, reason: 'error' });
+    }
+});
+
+/**
+ * POST /sdk-download - Genera e invia il pacchetto ZIP dell'SDK personalizzato
+ * Accetta parametri avanzati per la personalizzazione completa
+ */
+router.post('/sdk-download', jwtAuth, async (req, res) => {
+    try {
+        const { 
+            projectName, 
+            customAiKey, 
+            useAutoProtect, 
+            securityLevel,
+            framework = 'express',
+            platformUrl = '',
+            sensitiveFiles,
+            canaryPaths,
+            baitPaths,
+            selectedApiKeyId
+        } = req.body;
+
+        // Usa la chiave specificata o la più recente
+        const whereClause = { userId: req.user.userId, isActive: true };
+        if (selectedApiKeyId) {
+            whereClause.id = selectedApiKeyId;
+        }
+
+        const apiKeyRecord = await ApiKey.findOne({
+            where: whereClause,
+            order: [['createdAt', 'DESC']]
+        });
+
+        if (!apiKeyRecord) {
+            return res.status(404).json({ success: false, error: 'Nessuna chiave API attiva trovata' });
+        }
+
+        const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+
+        const zipBuffer = await SdkBundleService.createZipBundle({
+            apiKey: apiKeyRecord.key,
+            baseUrl: baseUrl,
+            appName: projectName || apiKeyRecord.name,
+            framework: framework,
+            platformUrl: platformUrl,
+            options: {
+                autoProtect: useAutoProtect !== undefined ? useAutoProtect : true,
+                securityLevel: securityLevel || 'medium',
+                aiKey: customAiKey || 'PLATFORM_DEFAULT',
+                sensitiveFiles: sensitiveFiles || ['.env', 'config.json', 'sessions_data.json'],
+                canaryPaths: canaryPaths || ['/.env.real', '/admin/config.php', '/.git/config', '/backup.sql'],
+                baitPaths: baitPaths || [
+                    '/shell.php', '/cmd.php', '/webshell.php', '/upload.php',
+                    '/cmd.jsp', '/shell.jsp', '/cmd.asp', '/shell.aspx'
+                ]
+            }
+        });
+
+        // Log l'evento di download
+        console.log(`📦 [SDK Download] Client ${req.user.email} ha scaricato SDK per "${projectName}" (framework: ${framework})`);
+
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', `attachment; filename="diana-sdk-${projectName || 'bundle'}.zip"`);
+        res.send(zipBuffer);
+
+    } catch (error) {
+        console.error('❌ [SDK Download] Errore:', error);
+        res.status(500).json({ success: false, error: 'Errore durante la generazione del bundle' });
     }
 });
 

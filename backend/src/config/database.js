@@ -11,7 +11,8 @@ const dbConfig = {
         password: process.env.DB_PASSWORD || 'postgres',
         database: process.env.DB_NAME || 'honeypot',
         host: process.env.DB_HOST || '127.0.0.1',
-        port: process.env.DB_PORT || 5432,
+        // Se host è db o non localhost, siamo in Docker -> 5432. Altrimenti (esterno) -> 5433
+        port: process.env.DB_PORT || (process.env.DB_HOST && process.env.DB_HOST !== '127.0.0.1' && process.env.DB_HOST !== 'localhost' ? 5432 : 5433),
         dialect: 'postgres',
         logging: false,
         pool: { max: 10, min: 2, acquire: 30000, idle: 10000 }

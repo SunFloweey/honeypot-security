@@ -118,13 +118,21 @@ router.get('/stream', (req, res) => {
 /**
  * DB Check - Verifica connessione e tabelle
  */
+// Health check del database per la Dashboard
 router.get('/db-check', async (req, res) => {
     try {
-        const result = await Log.count();
-        res.json({ status: 'ok', logCount: result });
+        // Permettiamo il check a chiunque sia autenticato (Admin o SaaS User)
+        // L'isolamento dei dati è garantito dagli altri endpoint
+        const count = await Log.count();
+        res.json({ 
+            success: true, 
+            status: 'connected', 
+            logs: count,
+            userRole: req.user?.isGlobal ? 'admin' : 'saas-client'
+        });
     } catch (err) {
-        console.error('❌ DB Check Error:', err);
-        res.status(500).json({ error: 'DB Error', message: err.message, stack: err.stack });
+        console.error('❌ Database connection error:', err);
+        res.status(500).json({ success: false, error: 'Database connection failed' });
     }
 });
 

@@ -82,12 +82,13 @@ async function requestCaptureMiddleware(req, res, next) {
     // 1. SKIP VELOCE PER ASSET STATICI E RICHIESTE DASHBOARD REALE
     const ext = path.extname(req.path).toLowerCase();
     
-    // Escludiamo solo la dashboard REALE (admin), non quella FAKE (ai-fakedashboard)
+    // Escludiamo la dashboard REALE e le rotte SaaS di gestione (per evitare falsi allarmi admin)
     const isRealAdminApi = req.path.startsWith('/api/overview') ||
         req.path.startsWith('/api/logs') ||
         req.path.startsWith('/api/stream') ||
         req.path.startsWith('/api/ai') ||
-        req.path.startsWith('/api/admin');
+        req.path.startsWith('/api/admin') ||
+        req.path.startsWith('/api/v1/saas'); // ESCLUDI GESTIONE SAAS (Registrazione, Login, Chiavi)
 
     if (STATIC_EXTENSIONS.has(ext) || req.path.startsWith('/assets/') || isRealAdminApi) {
         return next();

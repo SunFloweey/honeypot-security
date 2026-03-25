@@ -8,6 +8,7 @@ import { useDebounce } from '../hooks/useDebounce';
 // Components (Reusing existing ones but in a restricted layout)
 import DashboardSidebar from './components/DashboardSidebar';
 import DashboardOverview from './components/DashboardOverview';
+import OnboardingWizard from './components/OnboardingWizard';
 import RecentLogsTable from './components/RecentLogsTable';
 import SessionDetail from './components/SessionDetail';
 import LogDetailModal from './components/LogDetailModal';
@@ -39,6 +40,7 @@ const ClientDashboard = () => {
     const [viewData, setViewData] = useState(null);
     const [order, setOrder] = useState('DESC');
     const [liveAnalysis, setLiveAnalysis] = useState(null);
+    const [showOnboarding, setShowOnboarding] = useState(false);
 
     const debouncedIP = useDebounce(ipFilter, 500);
     const debouncedFingerprint = useDebounce(fingerprintFilter, 500);
@@ -47,6 +49,15 @@ const ClientDashboard = () => {
     const { stats, logs, totalLogs, loading, page, fetchData } = useDashboardData(
         riskFilter, debouncedIP, debouncedFingerprint, 50, dateFilter, order
     );
+
+    // Effetto per attivare onboarding se non ci sono log
+    React.useEffect(() => {
+        if (!loading && totalLogs === 0 && view === 'overview') {
+            setShowOnboarding(true);
+        } else if (totalLogs > 0) {
+            setShowOnboarding(false);
+        }
+    }, [totalLogs, loading, view]);
 
     const { setSSEStatus } = usePollingManager(fetchData);
 
@@ -136,6 +147,19 @@ const ClientDashboard = () => {
                     <span>Multi-Tenant Shield Active</span>
                 </div>
 
+                {showOnboarding && (
+                    <div style={{
+                        position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                        background: 'rgba(15, 23, 42, 0.95)', zIndex: 100, display: 'flex',
+                        alignItems: 'center', justifyContent: 'center'
+                    }}>
+                        <OnboardingWizard onComplete={() => {
+                            setShowOnboarding(false);
+                            fetchData(true);
+                        }} />
+                    </div>
+                )}
+
                 {view === 'overview' && (
                     <DashboardOverview
                         stats={stats}
@@ -191,6 +215,13 @@ const ClientDashboard = () => {
 
                 {view === 'terminal' && (
                     <TerminalMonitor />
+                )}
+
+                {view === 'sdk_setup' && (
+                    <OnboardingWizard onComplete={() => {
+                        setView('overview');
+                        fetchData(true);
+                    }} />
                 )}
             </main>
 

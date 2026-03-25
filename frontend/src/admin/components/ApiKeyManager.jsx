@@ -98,6 +98,50 @@ const ApiKeyManager = () => {
         alert('Chiave API copiata negli appunti!');
     };
 
+    const downloadSDK = async () => {
+        try {
+            const token = getToken();
+            const headers = localStorage.getItem('saasToken')
+                ? {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+                : {
+                    'x-admin-token': token,
+                    'Content-Type': 'application/json'
+                };
+
+            const activeKey = keys.find(k => k.isActive);
+            if (!activeKey) {
+                alert('Devi avere almeno una chiave API attiva per scaricare l\'SDK.');
+                return;
+            }
+
+            const res = await fetch('/api/v1/saas/sdk-download', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    projectName: activeKey.name,
+                    useAutoProtect: true,
+                    securityLevel: 'medium'
+                })
+            });
+
+            if (!res.ok) throw new Error('Download fallito');
+
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `diana-sdk-${activeKey.name}.zip`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        } catch (err) {
+            alert('Errore durante il download dell\'SDK: ' + err.message);
+        }
+    };
+
     return (
         <div className="api-key-manager">
             <header className="mb-2">
@@ -232,14 +276,21 @@ app.use(client.monitor());`}
                         </pre>
                     </div>
 
-                    <div className="mt-2" style={{ display: 'flex', gap: '20px' }}>
-                        <div style={{ flex: 1 }}>
-                            <h4 style={{ color: 'white', fontSize: '0.9rem', marginBottom: '5px' }}>🛡️ Protezione Attiva</h4>
-                            <p style={{ fontSize: '0.8rem', color: '#94a3b8' }}>I log verranno inviati automaticamente alla tua dashboard per l'analisi IA.</p>
+                    <div className="mt-2" style={{ display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div style={{ flex: '1 1 300px' }}>
+                            <h4 style={{ color: 'white', fontSize: '0.9rem', marginBottom: '5px' }}>📦 Pacchetto Completo</h4>
+                            <p style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Scarica l'SDK pre-configurato con la tua chiave e pronto per l'installazione immediata.</p>
+                            <button 
+                                className="btn-primary mt-1" 
+                                onClick={downloadSDK}
+                                style={{ background: 'var(--researcher-green)', color: 'black' }}
+                            >
+                                ⬇️ Scarica Bundle SDK (ZIP)
+                            </button>
                         </div>
-                        <div style={{ flex: 1 }}>
-                            <h4 style={{ color: 'white', fontSize: '0.9rem', marginBottom: '5px' }}>🤖 Analisi IA</h4>
-                            <p style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Riceverai consigli su come patchare le vulnerabilità in tempo reale.</p>
+                        <div style={{ flex: '1 1 200px' }}>
+                            <h4 style={{ color: 'white', fontSize: '0.9rem', marginBottom: '5px' }}>🛡️ Protezione Attiva</h4>
+                            <p style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Include esche interattive (webshell finti) per intrappolare gli attaccanti.</p>
                         </div>
                     </div>
                 </div>

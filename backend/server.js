@@ -10,7 +10,7 @@ const { sequelize, testConnection } = require('./src/config/database');
 const threatCache = require('./src/honeypot/utils/threatCache');
 const logQueue = require('./src/honeypot/utils/logQueue');
 
-const PORT = process.env.HONEYPOT_PORT || 4001;
+const PORT = process.env.HONEYPOT_PORT || process.env.PORT || 4002;
 const dgram = require('dgram');
 const udpClient = dgram.createSocket('udp4');
 const HEARTBEAT_PORT = 4005;
@@ -31,6 +31,7 @@ const io = new Server(httpServer, {
 });
 
 const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.JWT_SECRET || process.env.ADMIN_TOKEN;
 
 // WebSocket Authentication Middleware
 io.use((socket, next) => {
@@ -44,10 +45,11 @@ io.use((socket, next) => {
 
     try {
         // Try SaaS JWT first
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || process.env.ADMIN_TOKEN);
+        const decoded = jwt.verify(token, JWT_SECRET);
         socket.user = {
-            userId: decoded.userId || decoded.id,
-            isGlobal: false
+            userId: decoded.sub || decoded.userId || decoded.id,
+            isGlobal: false,
+            scope: decoded.scope || []
         };
         next();
     } catch (err) {
@@ -126,7 +128,11 @@ async function bootstrap() {
 
         // Sync models
         console.log('⏳ Sincronizzazione modelli DB...');
-        await sequelize.sync({ alter: true });
+        try {
+            await sequelize.sync();
+        } catch (dbErr) {
+            console.warn('⚠️ Errore non fatale durante il sync del DB:', dbErr.message);
+        }
         console.log('✅ Modelli DB sincronizzati.');
 
         // 2. Initialize Docker Engine

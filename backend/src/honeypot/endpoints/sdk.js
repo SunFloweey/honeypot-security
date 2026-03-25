@@ -6,6 +6,7 @@ const IntrusionResponseService = require('../../services/intrusionResponseServic
 const logQueue = require('../utils/logQueue');
 const crypto = require('crypto');
 const ApiKey = require('../../models/ApiKey');
+const VirtualTerminal = require('../../services/virtualTerminal');
 
 /**
  * SDK Authentication Middleware (Multi-Tenant)
@@ -14,21 +15,51 @@ const ApiKey = require('../../models/ApiKey');
  * 1. Cerca nella tabella ApiKey del database (SaaS mode)
  * 2. Fallback: controlla ADMIN_TOKEN (retrocompatibilità)
  */
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.JWT_SECRET || process.env.ADMIN_TOKEN;
+
 const sdkAuth = async (req, res, next) => {
-    const apiKey = req.headers['x-api-key'];
+    let apiKey = req.headers['x-api-key'];
+    const authHeader = req.headers.authorization;
+
+    // 1. Supporto per Bearer Token (JWT)
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.split(' ')[1];
+        
+        // Se è l'admin token statico
+        if (token === process.env.ADMIN_TOKEN) {
+            req.tenantKeyId = null;
+            req.tenantUserId = null;
+            req.tenantProjectName = req.headers['x-app-name'] || 'LegacyAdmin';
+            return next();
+        }
+
+        try {
+            const decoded = jwt.verify(token, JWT_SECRET);
+            req.tenantUserId = decoded.sub || decoded.userId;
+            req.tenantProjectName = req.headers['x-app-name'] || 'SaaS-App';
+            req.scopes = decoded.scope || [];
+            
+            // Per il multitenancy basato su chiavi vecchie, cerchiamo se c'è una chiave associata
+            // In futuro il token potrebbe includere direttamente il projectId/keyId
+            return next();
+        } catch (err) {
+            console.warn(`[SDK Auth] JWT non valido: ${err.message}`);
+        }
+    }
+
     if (!apiKey) {
         return res.status(401).json({
             success: false,
-            error: 'Unauthorized: Chiave API mancante (x-api-key)'
+            error: 'Unauthorized: Autenticazione richiesta (Bearer token o x-api-key)'
         });
     }
 
-    // 1. Cerca nella tabella ApiKey (SaaS multi-tenant)
+    // 2. Cerca nella tabella ApiKey (SaaS multi-tenant legacy)
     try {
         const keyRecord = await ApiKey.findOne({ where: { key: apiKey, isActive: true } });
 
         if (keyRecord) {
-            // Aggiorna lastUsedAt in background
             keyRecord.lastUsedAt = new Date();
             await keyRecord.save().catch(() => { });
 
@@ -36,14 +67,12 @@ const sdkAuth = async (req, res, next) => {
             req.tenantUserId = keyRecord.userId;
             req.tenantProjectName = keyRecord.name;
             return next();
-        } else {
-            console.log(`🔍 [SDK Auth] Chiave non trovata o inattiva: ${apiKey.substring(0, 10)}...`);
         }
     } catch (error) {
         console.error('❌ [SDK Auth] Error:', error.message);
     }
 
-    // 2. Fallback: ADMIN_TOKEN (retrocompatibilità)
+    // 3. Fallback: ADMIN_TOKEN (retrocompatibilità x-api-key)
     if (apiKey === process.env.ADMIN_TOKEN) {
         req.tenantKeyId = null;
         req.tenantUserId = null;
@@ -51,11 +80,9 @@ const sdkAuth = async (req, res, next) => {
         return next();
     }
 
-    console.log(`🚫 [SDK Auth] Accesso negato per chiave: ${apiKey.substring(0, 10)}... (AdminToken: ${String(process.env.ADMIN_TOKEN).substring(0, 5)}...)`);
-
     return res.status(401).json({
         success: false,
-        error: 'Unauthorized: Chiave API non valida'
+        error: 'Unauthorized: Chiave API o Token non valido'
     });
 };
 
@@ -162,6 +189,34 @@ router.post('/evacuate', async (req, res) => {
         message: 'Evacuation chain triggered successfully. Data protection in progress.',
         status: 'PROTECTION_STARTED'
     });
+});
+
+/**
+ * POST /api/v1/sdk/terminal
+ * Proxy for virtual terminal execution from SDK clients.
+ */
+router.post('/terminal', async (req, res) => {
+    const { command, sessionKey, entryPath, isIsolated } = req.body;
+    const ip = req.body.ip || req.ip;
+
+    if (!command) {
+        return res.status(400).json({ success: false, error: 'Command is required' });
+    }
+
+    try {
+        const result = await VirtualTerminal.execute(sessionKey || ip, command, {
+            entryPath: entryPath || 'sdk-terminal',
+            ip: ip,
+            isIsolated: !!isIsolated,
+            apiKeyId: req.tenantKeyId,
+            userId: req.tenantUserId
+        });
+
+        res.json({ success: true, ...result });
+    } catch (error) {
+        console.error('❌ [SDK Terminal] Error:', error.message);
+        res.status(500).json({ success: false, error: 'Terminal execution failed' });
+    }
 });
 
 module.exports = router;
