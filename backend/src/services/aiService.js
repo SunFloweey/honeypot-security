@@ -150,8 +150,23 @@ class AIService {
     }
 
     static async getDeceptiveResponse(req) {
-        const prompt = prompts.ADAPTIVE_DECEPTION(req.method, req.path, req.query, req.body);
-        return await this._generateContent(prompt);
+        try {
+            const prompt = prompts.ADAPTIVE_DECEPTION(req.method, req.path, req.query, req.body);
+            console.log(`🤖 [Deception IA] Richiesta generazione per: ${req.path}`);
+            
+            const result = await this._generateContent(prompt);
+            
+            if (!result) {
+                console.warn('⚠️ [Deception IA] L\'IA non ha restituito alcun dato. Fallback.');
+                return null;
+            }
+
+            console.log('✅ [Deception IA] Risposta generata con successo.');
+            return result;
+        } catch (error) {
+            console.error('❌ [Deception IA] Errore critico generazione:', error.message);
+            return null;
+        }
     }
 }
 

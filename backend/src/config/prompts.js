@@ -51,14 +51,15 @@ module.exports = {
         Parametri Query: ${JSON.stringify(query)}
         Corpo Richiesta: ${JSON.stringify(body)}
 
-        L'attaccante sta chiaramente cercando di sfruttare una vulnerabilità (SQLi, NoSQLi, o Path Traversal).
-        Il tuo obiettivo è indurlo a continuare l'attacco fornendogli una risposta "positiva" ma falsa.
+        L'attaccante sta cercando di sfruttare una vulnerabilità (SQLi, NoSQLi, o Path Traversal).
+        Il tuo obiettivo è indurlo a continuare l'attacco fornendogli una risposta finta ma credibile.
 
-        REGOLE:
-        1. Se rilevi SQL Injection (es. ' OR 1=1), restituisci un array JSON di 3-5 utenti finti con campi: id, username, email, password_hash (usa MD5 o SHA1 finti).
-        2. Se rilevi un tentativo di accesso a file (es. ../../etc/passwd), restituisci una stringa che simula un contenuto di file parziale e offuscato.
-        3. Se la richiesta è generica, restituisci un errore SQL dettagliato che "suggerisce" la presenza di una falla.
-        4. NON aggiungere spiegazioni. Restituisci SOLO il contenuto della risposta (JSON o Testo).
+        REQUISITI OUTPUT (IMPORTANTE):
+        1. Rispondi ESCLUSIVAMENTE in formato JSON valido.
+        2. Se rilevi SQL Injection, restituisci un oggetto JSON contenente i dati finti (es. un array di utenti).
+        3. Se vuoi simulare un errore, restituisci un oggetto JSON di errore credibile (es. { "error": "...", "sql": "..." }).
+        4. NON aggiungere spiegazioni esterne al JSON.
+        5. Assicurati che i dati siano pertinenti al contesto dell'applicazione colpita.
     `,
 
     // Enhanced payload decoding prompt - receives pre-decoded analysis from PayloadDecoder

@@ -107,7 +107,7 @@ app.use(adminAuthMiddleware);
 
 // Mount dashboard API (Include le notifiche interne /api/internal/notify)
 app.use('/api', dashboardEndpoints);
-app.use('/api', require('./src/honeypot/endpoints/saas-auth').router); // <--- CORRETTO: Gestione Client SaaS
+app.use('/api/v1/saas', require('./src/honeypot/endpoints/saas-auth').router); // <--- CORRETTO: Gestione Client SaaS (Spostato sotto v1/saas)
 app.use('/api/ai', require('./src/honeypot/endpoints/ai-analysis'));
 
 // Mount terminal forensics API

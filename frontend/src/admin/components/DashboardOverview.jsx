@@ -27,19 +27,14 @@ const DashboardOverview = ({ stats, logs, totalLogs, currentPage, onPageChange, 
                         <p style={{ maxWidth: '600px', margin: '0 auto', color: '#94a3b8', lineHeight: '1.6' }}>
                             Il tuo centro di controllo è pronto. È normale che non ci siano ancora attività rilevate se i sistemi di difesa sono stati appena attivati!
                         </p>
-                        <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'center', gap: '2rem' }}>
-                            <div style={{ textAlign: 'left' }}>
-                                <div style={{ color: 'var(--researcher-green)', fontWeight: 'bold' }}>1. Create an API Key</div>
-                                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>Go to API Keys section</div>
-                            </div>
-                            <div style={{ textAlign: 'left' }}>
-                                <div style={{ color: 'var(--researcher-green)', fontWeight: 'bold' }}>2. Install the SDK</div>
-                                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>Protect your apps</div>
-                            </div>
-                            <div style={{ textAlign: 'left' }}>
-                                <div style={{ color: 'var(--researcher-green)', fontWeight: 'bold' }}>3. View Live Attacks</div>
-                                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>Watch hackers in real-time</div>
-                            </div>
+                        <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'center' }}>
+                            <button
+                                className="btn-primary"
+                                onClick={() => document.querySelector('.sidebar-link:nth-of-type(6)')?.click()} // Simula il click su "SDK Setup" - Soluzione temporanea
+                                style={{ padding: '10px 24px', fontSize: '1rem', fontWeight: 'bold' }}
+                            >
+                                📦 Vai al Setup SDK
+                            </button>
                         </div>
                     </div>
                 )}

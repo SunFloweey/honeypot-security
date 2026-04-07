@@ -219,4 +219,27 @@ router.post('/terminal', async (req, res) => {
     }
 });
 
+/**
+ * POST /api/v1/sdk/deceive
+ * Generates a deceptive AI response for a specific attack.
+ */
+router.post('/deceive', async (req, res) => {
+    const { method, path, query, body } = req.body;
+    
+    try {
+        console.log(`[SDK-DECEPTION] Generando finta risposta per: ${path}`);
+        const fakeData = await AIService.getDeceptiveResponse({ 
+            method: method || 'GET', 
+            path: path || '/', 
+            query: query || {}, 
+            body: body || {} 
+        });
+        
+        res.json({ success: true, deception: fakeData });
+    } catch (error) {
+        console.error('❌ [SDK Deception] Error:', error.message);
+        res.status(500).json({ success: false, error: 'Deception generation failed' });
+    }
+});
+
 module.exports = router;

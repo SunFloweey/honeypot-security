@@ -2,18 +2,22 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { sanitizeHTML } from '../../utils/sanitizer';
 
 // Funzione helper per tradurre metodi HTTP in linguaggio comprensibile
-const getMethodDescription = (method) => {
+const getMethodDescription = (method, path) => {
+    if (method === 'SDK_REPORT' || path?.startsWith('sdk://')) {
+        return { icon: '🛡️', text: 'SDK Defense', desc: 'Evento rilevato dallo scudo DIANA' };
+    }
+
     const methods = {
-        'GET': { icon: '', text: 'Lettura', desc: 'Stava leggendo/informazioni' },
-        'POST': { icon: '', text: 'Invio Dati', desc: 'Stava inviando dati/informazioni' },
-        'PUT': { icon: '', text: 'Aggiornamento', desc: 'Stava modificando qualcosa' },
-        'DELETE': { icon: '', text: 'Eliminazione', desc: 'Stava cercando di eliminare' },
-        'PATCH': { icon: '', text: 'Modifica', desc: 'Stava apportando modifiche' },
-        'HEAD': { icon: '', text: 'Controllo', desc: 'Stava controllando se esiste' },
-        'OPTIONS': { icon: '', text: 'Opzioni', desc: 'Stava verificando opzioni' }
+        'GET': { icon: '🌐', text: 'Lettura', desc: 'Stava leggendo/informazioni' },
+        'POST': { icon: '📩', text: 'Invio Dati', desc: 'Stava inviando dati/informazioni' },
+        'PUT': { icon: '✏️', text: 'Aggiornamento', desc: 'Stava modificando qualcosa' },
+        'DELETE': { icon: '🗑️', text: 'Eliminazione', desc: 'Stava cercando di eliminare' },
+        'PATCH': { icon: '🛠️', text: 'Modifica', desc: 'Stava apportando modifiche' },
+        'HEAD': { icon: '🔍', text: 'Controllo', desc: 'Stava controllando se esiste' },
+        'OPTIONS': { icon: '⚙️', text: 'Opzioni', desc: 'Stava verificando opzioni' }
     };
     
-    const methodInfo = methods[method] || { icon: '', text: method, desc: `Azione ${method}` };
+    const methodInfo = methods[method] || { icon: '❓', text: method, desc: `Azione ${method}` };
     return methodInfo;
 };
 
@@ -119,6 +123,29 @@ const RecentLogsTable = ({ logs, totalLogs, currentPage, onPageChange, onInvesti
                         {logs.slice(startIndex, endIndex).map(log => {
                             const isLeaked = !!log.leakedIp;
                             const riskLevel = log.riskScore || 0;
+                            
+                            // Logica intelligente per i log dell'SDK
+                            let displayMethod = log.method;
+                            let displayPath = log.path;
+                            let metadata = null;
+                            
+                            try {
+                                metadata = typeof log.body === 'string' ? JSON.parse(log.body) : log.body;
+                            } catch (e) { }
+
+                            // Se è un log dell'SDK, estraiamo l'evento reale
+                            if ((log.method === 'SDK_REPORT' || log.path?.startsWith('sdk://')) && log.path) {
+                                const pathParts = log.path.split('/');
+                                displayMethod = pathParts[pathParts.length - 1]; // L'evento (es. LOGIN_ATTEMPT)
+                                
+                                // Mostriamo il path originale se presente nei metadati
+                                if (metadata && metadata.path) {
+                                    displayPath = metadata.path;
+                                }
+                            }
+
+                            const methodInfo = getMethodDescription(log.method, log.path);
+
                             return (
                                 <tr key={log.id} style={{
                                     height: `${ROW_HEIGHT}px`,
@@ -129,11 +156,12 @@ const RecentLogsTable = ({ logs, totalLogs, currentPage, onPageChange, onInvesti
                                     <td style={{ color: '#10b981', fontSize: '0.75rem' }}>
                                         {log.apiKey ? log.apiKey.name : <span className="text-muted">Internal</span>}
                                     </td>
-                                    <td style={{ color: '#fbbf24', fontWeight: 'bold' }} title={getMethodDescription(log.method).desc}>
-                                        {getMethodDescription(log.method).icon} {getMethodDescription(log.method).text}
+                                    <td style={{ color: '#fbbf24', fontWeight: 'bold' }} title={methodInfo.desc}>
+                                        <span style={{ marginRight: '4px' }}>{methodInfo.icon}</span>
+                                        {displayMethod.replace(/_/g, ' ')}
                                     </td>
-                                    <td className="monospace" title={log.path} style={{ color: '#60a5fa' }}>
-                                        {sanitizeHTML(log.path?.substring(0, 20))}{log.path?.length > 20 ? '...' : ''}
+                                    <td className="monospace" title={displayPath} style={{ color: '#60a5fa' }}>
+                                        {sanitizeHTML(displayPath?.substring(0, 25))}{displayPath?.length > 25 ? '...' : ''}
                                     </td>
                                     <td>
                                         <span

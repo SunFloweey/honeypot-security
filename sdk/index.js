@@ -4,50 +4,44 @@
  * DIANA - Deceptive Infrastructure & Active Network Armor
  * 
  * Usage:
- *   const diana = require('@diana-security/sdk');
+ *   const { createClient, createMiddleware } = require('@diana-security/sdk');
  * 
- *   // Auto-configured from environment variables (DIANA_API_KEY, DIANA_BASE_URL)
- *   const client = diana.createClient();
+ *   // 1. Create a client directly
+ *   const diana = createClient();
+ *   app.use(diana.monitor());
  * 
- *   // Or with explicit config
- *   const client = diana.createClient({
- *       apiKey: 'hp_sk_...',
- *       baseUrl: 'https://your-diana-server.com',
- *       appName: 'MyApp'
- *   });
- * 
- *   // Express middleware
- *   app.use(client.monitor());
- * 
- *   // Track events
- *   await client.trackEvent('LOGIN_ATTEMPT', { user: 'admin', ip: '1.2.3.4' });
+ *   // 2. Or use the middleware factory shorthand
+ *   const shield = createMiddleware('express');
+ *   app.use(shield);
  */
 
 const DianaClient = require('./lib/DianaClient');
-const middleware = require('./lib/middleware');
 
 /**
- * Create a new DIANA client instance.
- * Reads configuration from environment variables if not provided:
- *   - DIANA_API_KEY (required)
- *   - DIANA_BASE_URL (required)
- *   - DIANA_APP_NAME (optional, default: 'DianaApp')
- * 
- * @param {Object} [config] - Configuration object
- * @param {string} [config.apiKey] - API key or JWT token for authentication
- * @param {string} [config.baseUrl] - Base URL of the DIANA server
- * @param {string} [config.appName] - Application name
- * @param {Object} [config.options] - Security options
+ * Factory to create a new DIANA client instance.
+ * @param {Object} config - Configuration object
  * @returns {DianaClient}
  */
-function createClient(config = {}) {
-    return new DianaClient(config);
-}
+const createClient = (config) => new DianaClient(config);
+
+/**
+ * Factory to create a middleware for specific frameworks.
+ * @param {string} framework - 'express' | 'koa' | 'fastify' (currently express)
+ * @param {Object} config - Client configuration
+ * @returns {Function} Middleware function
+ */
+const createMiddleware = (framework = 'express', config = {}) => {
+    const client = new DianaClient(config);
+    if (framework === 'express') return client.monitor();
+    
+    // Support for future frameworks can be added here
+    throw new Error(`Framework "${framework}" is not yet supported by DIANA SDK.`);
+};
 
 module.exports = {
-    createClient,
     DianaClient,
-    expressMiddleware: middleware.expressMiddleware,
-    fastifyPlugin: middleware.fastifyPlugin,
-    koaMiddleware: middleware.koaMiddleware,
+    createClient,
+    createMiddleware,
+    // For backward compatibility with some versions
+    createClientInstance: createClient
 };

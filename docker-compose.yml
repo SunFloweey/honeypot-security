@@ -27,16 +27,16 @@ services:
       - backend/.env
     environment:
       - DB_HOST=db
-      - PORT=4002
+      - PORT=5002
       - VAULT_HOST=admin
-      - VAULT_PORT=4003
+      - VAULT_PORT=5003
     volumes:
       - ./secure_vault_keys:/app/secure_vault_keys
       - ./vault_storage:/app/secure_vault
       - ./sdk:/app/sdk
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
-      - "4002:4002"
+      - "5002:5002"
     depends_on:
       db:
         condition: service_healthy
@@ -74,9 +74,9 @@ services:
       - backend/.env
     environment:
       - DB_HOST=db
-      - PORT=4003
+      - PORT=5003
     ports:
-      - "4003:4003"
+      - "5003:5003"
     volumes:
       - ./secure_vault_keys:/app/secure_vault_keys
       - ./vault_storage:/app/secure_vault

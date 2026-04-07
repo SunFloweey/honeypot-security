@@ -39,13 +39,13 @@ program
         console.log('');
 
         const answers = await inquirer.prompt([
-            {
-                type: 'input',
-                name: 'baseUrl',
-                message: 'DIANA Server URL:',
-                default: 'http://localhost:4002',
-                validate: (val) => val.startsWith('http') ? true : 'Must be a valid URL (http:// or https://)'
-            },
+
+
+
+
+
+
+
             {
                 type: 'input',
                 name: 'apiKey',
@@ -70,6 +70,10 @@ program
                 default: 'medium'
             }
         ]);
+
+        // Default DIANA URL set automatically
+        answers.baseUrl = 'http://localhost:5002';
+
 
         // Create .env file with DIANA config
         const envPath = path.resolve(process.cwd(), '.env');

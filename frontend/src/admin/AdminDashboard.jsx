@@ -17,6 +17,7 @@ import HoneytokenMonitor from './components/HoneytokenMonitor';
 import TerminalMonitor from './components/TerminalMonitor';
 import ApiKeyManager from './components/ApiKeyManager';
 import TenantManager from './components/TenantManager';
+import OnboardingWizard from './components/OnboardingWizard';
 
 const AdminDashboard = () => {
     React.useEffect(() => {
@@ -24,7 +25,9 @@ const AdminDashboard = () => {
     }, []);
 
     // Auth
-    const { getToken } = useAdminAuth();
+    const { getToken, getUser } = useAdminAuth();
+    const user = getUser();
+    const isAnyAdmin = (user?.role === 'admin' || user?.isGlobal || !!localStorage.getItem('adminToken'));
 
     // UI State
     const [selectedLog, setSelectedLog] = useState(null);
@@ -38,7 +41,7 @@ const AdminDashboard = () => {
     const debouncedFingerprint = useDebounce(fingerprintFilter, 500);
 
     const [dateFilter, setDateFilter] = useState(''); // Filtro DATA
-    const [view, setView] = useState('overview');
+    const [view, setView] = useState(isAnyAdmin ? 'tenants' : 'overview');
     const [viewData, setViewData] = useState(null);
     const [order, setOrder] = useState('DESC');
     const [liveAnalysis, setLiveAnalysis] = useState(null);
@@ -200,6 +203,10 @@ const AdminDashboard = () => {
 
                 {view === 'tenants' && (
                     <TenantManager />
+                )}
+
+                {view === 'sdk_setup' && (
+                    <OnboardingWizard onComplete={() => setView('overview')} />
                 )}
             </main>
 

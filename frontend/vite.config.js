@@ -6,8 +6,12 @@ export default defineConfig({
 
   server: {
     proxy: {
+      '/api/v1/saas': {
+        target: 'http://localhost:5003',
+        changeOrigin: true
+      },
       '/api': {
-        target: 'http://localhost:4002',
+        target: 'http://localhost:5002',
         changeOrigin: true,
         timeout: 30000,
         proxyTimeout: 30000,
@@ -28,11 +32,11 @@ export default defineConfig({
         }
       },
       '/admin': {
-        target: 'http://localhost:4002',
+        target: 'http://localhost:5002',
         changeOrigin: true
       },
       '/trap': {
-        target: 'http://localhost:4002',
+        target: 'http://localhost:5002',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/trap/, '')
       }

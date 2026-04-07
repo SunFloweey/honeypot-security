@@ -56,16 +56,25 @@ class DianaClient {
 
         // Security options with sensible defaults
         this.options = {
-            autoProtect: true,
-            securityLevel: 'medium',
-            canaryPaths: ['/.env.real', '/admin/config.php', '/.git/config', '/backup.sql'],
-            sensitiveFiles: ['.env', 'sessions_data.json', 'config.json'],
-            baitPaths: [
+            autoProtect: config.options?.autoProtect !== undefined ? 
+                config.options.autoProtect : 
+                (process.env.DIANA_AUTO_PROTECT === 'true' || process.env.DIANA_AUTO_PROTECT === undefined),
+            securityLevel: config.options?.securityLevel || process.env.DIANA_SECURITY_LEVEL || 'medium',
+            blockSuspicious: config.options?.blockSuspicious !== undefined ?
+                config.options.blockSuspicious :
+                (process.env.DIANA_BLOCK_SUSPICIOUS === 'true' || process.env.DIANA_BLOCK_SUSPICIOUS === undefined),
+            canaryPaths: config.options?.canaryPaths || ['/.env.real', '/admin/config.php', '/.git/config', '/backup.sql'],
+            sensitiveFiles: config.options?.sensitiveFiles || ['.env', 'sessions_data.json', 'config.json'],
+            baitPaths: config.options?.baitPaths || [
                 '/shell.php', '/cmd.php', '/webshell.php', '/upload.php',
                 '/cmd.jsp', '/shell.jsp', '/cmd.asp', '/shell.aspx'
-            ],
-            ...(config.options || {})
+            ]
         };
+
+        // Automatic blocking logic based on security level if not explicitly set
+        if (config.options?.blockSuspicious === undefined && process.env.DIANA_BLOCK_SUSPICIOUS === undefined) {
+            this.options.blockSuspicious = (this.options.securityLevel === 'medium' || this.options.securityLevel === 'high');
+        }
 
         // Determine auth strategy based on the key format
         this._authHeaders = this._buildAuthHeaders();
@@ -163,6 +172,7 @@ class DianaClient {
                 // 3. Suspicious payload analysis
                 const payload = JSON.stringify({ query: req.query, body: req.body });
                 if (this._isSuspicious(payload)) {
+                    console.warn(`🛡️  [DIANA] SUSPICIOUS PAYLOAD DETECTED from ${ip}: ${reqPath}`);
                     this.trackEvent('SUSPICIOUS_PAYLOAD', { path: reqPath, payload, ip }, ip).catch(() => {});
 
                     // Background AI analysis for critical threats
@@ -171,6 +181,29 @@ class DianaClient {
                             this.triggerEvacuation(`AI detected critical threat: ${analysis.analysis.explanation}`).catch(() => {});
                         }
                     }).catch(() => {});
+
+                    // Blocking if enabled or in protection mode (STEALTH & DECEPTION MODE)
+                    if (this.options.blockSuspicious) {
+                        try {
+                            // Chiediamo a DIANA di generare una risposta d'inganno (MIRAGE)
+                            const result = await this.getDeceptiveResponse(req.method, reqPath, req.query, req.body);
+                            
+                            if (result.success && result.deception) {
+                                // Se l'IA ha generato l'inganno, serviamolo all'attaccante con 200 OK
+                                return res.status(200).json(result.deception);
+                            }
+                        } catch (deceptionError) {
+                            console.error('⚠️ [DIANA Mirage] Fallback to static error:', deceptionError.message);
+                        }
+
+                        // Fallback: simuliamo un errore generico del DB/Server se l'IA fallisce
+                        return res.status(500).json({
+                            success: false,
+                            error: 'Internal Server Error',
+                            message: 'An unexpected database error occurred while processing your request.',
+                            code: 'ERR_DB_QUERY_FAILED'
+                        });
+                    }
                 }
             } catch (err) {
                 // Never block the request if SDK fails
@@ -214,6 +247,23 @@ class DianaClient {
         try {
             const payloadStr = typeof payload === 'string' ? payload : JSON.stringify(payload);
             const response = await this.client.post('/analyze', { payload: payloadStr });
+            return response.data;
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    }
+
+    /**
+     * Get a deceptive AI-generated response for a suspicious request
+     * @param {string} method - HTTP method
+     * @param {string} path - Request path
+     * @param {Object} query - Query parameters
+     * @param {Object} body - Request body
+     * @returns {Promise<Object>} Deceptive response
+     */
+    async getDeceptiveResponse(method, path, query = {}, body = {}) {
+        try {
+            const response = await this.client.post('/deceive', { method, path, query, body });
             return response.data;
         } catch (error) {
             return { success: false, error: error.message };

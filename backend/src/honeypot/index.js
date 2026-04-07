@@ -22,6 +22,7 @@ const fakeDashboard = require('./endpoints/ai-fakedashboard');
 const sdkEndpoints = require('./endpoints/sdk');
 const { router: terminalEndpoints, commandInjectionCatcher } = require('./endpoints/terminal');
 const { router: saasAuthEndpoints } = require('./endpoints/saas-auth');
+const { Log } = require('../models');
 
 const router = express.Router();
 
@@ -71,20 +72,23 @@ router.use('/wp-admin', adminEndpoints); // WordPress target popolare
 // 1. PUBLIC/TRAP API ROUTES (No Auth)
 router.use('/api/intel', intelEndpoints); // WebRTC leaks, etc.
 
-// Montiamo la trappola IA PRIMA degli endpoint statici finti
-router.use('/api/v1', fakeDashboard);
+// SDK ENDPOINTS (Priorità alta, prima della trappola IA)
 router.use('/api/v1/sdk', sdkEndpoints);
-router.use('/api/v1/saas', saasAuthEndpoints); // SaaS: Registrazione, Login, Gestione Chiavi API
+
+// Montiamo la trappola IA DOPO gli endpoint SDK
+router.use('/api/v1', fakeDashboard);
+
+// Montiamo l'ambiente reale SaaS Auth (Login, Registrazione, Gestione Tenant)
+router.use('/api/v1/saas', saasAuthEndpoints);
 
 router.use('/api', apiEndpoints);          // Public bait (/api/users, etc.)
 
 // 2. PROTECTED ADMIN ROUTES (Auth Required)
 router.use('/api/ai', adminAuthMiddleware, aiAnalysisEndpoints);
 
-// Endpoint di check accessibile per monitoraggio (Evita 401 Unauthorized che blocca il frontend)
-router.get('/api/db-check', async (req, res) => {
+// Endpoint di check accessibile per monitoraggio (Richiede Auth per verifica token reale)
+router.get('/api/db-check', adminAuthMiddleware, async (req, res) => {
     try {
-        const { Log } = require('../../models');
         const count = await Log.count();
         res.json({ 
             success: true, 
