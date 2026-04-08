@@ -41,7 +41,7 @@ class LogQueue {
 
             // 1. AGGREGAZIONE SESSIONI PER UPSERT MASSIVO
             const sessionMap = new Map();
-            currentBatch.forEach(({ req }) => {
+            currentBatch.forEach(({ req, apiKeyId }) => {
                 if (!req.sessionKey) return;
 
                 if (!sessionMap.has(req.sessionKey)) {
@@ -50,7 +50,8 @@ class LogQueue {
                         ipAddress: req.ipAddress,
                         userAgent: req.userAgent,
                         requestCount: 0,
-                        lastSeen: new Date()
+                        lastSeen: new Date(),
+                        apiKeyId: apiKeyId || null
                     });
                 }
                 const sess = sessionMap.get(req.sessionKey);

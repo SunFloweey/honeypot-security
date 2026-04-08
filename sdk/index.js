@@ -16,6 +16,10 @@
  */
 
 const DianaClient = require('./lib/DianaClient');
+const DianaDaemon = require('./lib/Daemon');
+
+// Create a default instance (Singleton) for easier programmatic use
+const defaultInstance = new DianaClient();
 
 /**
  * Factory to create a new DIANA client instance.
@@ -25,23 +29,36 @@ const DianaClient = require('./lib/DianaClient');
 const createClient = (config) => new DianaClient(config);
 
 /**
+ * Factory to create a new DIANA daemon instance.
+ * @param {Object} config - Configuration object
+ * @returns {DianaDaemon}
+ */
+const createDaemon = (config) => new DianaDaemon(config);
+
+/**
  * Factory to create a middleware for specific frameworks.
- * @param {string} framework - 'express' | 'koa' | 'fastify' (currently express)
- * @param {Object} config - Client configuration
- * @returns {Function} Middleware function
  */
 const createMiddleware = (framework = 'express', config = {}) => {
-    const client = new DianaClient(config);
+    const client = config ? new DianaClient(config) : defaultInstance;
     if (framework === 'express') return client.monitor();
-    
-    // Support for future frameworks can be added here
-    throw new Error(`Framework "${framework}" is not yet supported by DIANA SDK.`);
+    throw new Error(`Framework "${framework}" is not yet supported.`);
 };
 
+// Main Export
 module.exports = {
     DianaClient,
+    DianaDaemon,
     createClient,
+    createDaemon,
     createMiddleware,
-    // For backward compatibility with some versions
-    createClientInstance: createClient
+    
+    // Auto-initialized instance methods for direct access
+    // This allows: require('@diana-security/sdk').log('...')
+    monitor: (...args) => defaultInstance.monitor(...args),
+    log: (...args) => defaultInstance.log(...args),
+    info: (...args) => defaultInstance.info(...args),
+    warn: (...args) => defaultInstance.warn(...args),
+    error: (...args) => defaultInstance.error(...args),
+    trackEvent: (...args) => defaultInstance.trackEvent(...args),
+    triggerEvacuation: (...args) => defaultInstance.triggerEvacuation(...args)
 };

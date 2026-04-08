@@ -87,7 +87,7 @@ class DianaClient {
                 'Content-Type': 'application/json',
                 'X-App-Name': this.appName
             },
-            timeout: 10000
+            timeout: 30000
         });
 
         this.evacuationTriggered = false;
@@ -230,12 +230,42 @@ class DianaClient {
             const response = await this.client.post('/logs', {
                 event,
                 metadata,
-                ipAddress
+                ipAddress: ipAddress || '127.0.0.1'
             });
             return response.data;
         } catch (error) {
             return { success: false, error: error.message };
         }
+    }
+
+    /**
+     * Programmatic Logging - Log an informational message to DIANA
+     * @param {string} message - The log message
+     * @param {Object} [context] - Additional data context
+     */
+    async log(message, context = {}) {
+        return this.trackEvent('APP_LOG', { severity: 'info', message, ...context });
+    }
+
+    /**
+     * Programmatic Logging - Log an info message
+     */
+    async info(message, context = {}) {
+        return this.log(message, context);
+    }
+
+    /**
+     * Programmatic Logging - Log a warning message (potential threat)
+     */
+    async warn(message, context = {}) {
+        return this.trackEvent('APP_LOG', { severity: 'warn', message, ...context });
+    }
+
+    /**
+     * Programmatic Logging - Log an error message (high risk)
+     */
+    async error(message, context = {}) {
+        return this.trackEvent('APP_LOG', { severity: 'error', message, ...context });
     }
 
     /**

@@ -27,9 +27,11 @@ const PORT = process.env.PORT || process.env.ADMIN_PORT || 4003;
 // STRICT SECURITY: Admin dashboard is isolated from honeypot
 app.use(express.json({ limit: '1mb' }));
 
-// CORS: Allow both dev server and production (port 80)
+// CORS: Configurabile per dev/produzione
+const allowedOrigins = (process.env.ADMIN_ALLOWED_ORIGINS || process.env.ADMIN_ALLOWED_ORIGIN || 'http://localhost:5173,http://localhost')
+    .split(',').map(o => o.trim());
 app.use(cors({
-    origin: [process.env.ADMIN_ALLOWED_ORIGIN || 'http://localhost:5173', 'http://localhost'],
+    origin: allowedOrigins,
     credentials: true
 }));
 

@@ -17,6 +17,7 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const chalk = require('chalk');
+const { createDaemon } = require('../index');
 
 const program = new Command();
 
@@ -71,8 +72,8 @@ program
             }
         ]);
 
-        // Default DIANA URL set automatically
-        answers.baseUrl = 'http://localhost:5002';
+        // DIANA Server URL: configurabile via ENV per deploy online
+        answers.baseUrl = process.env.DIANA_SERVER_URL || 'http://localhost:5002';
 
 
         // Create .env file with DIANA config
@@ -173,7 +174,7 @@ program
                 type: 'input',
                 name: 'serverUrl',
                 message: 'DIANA Server URL:',
-                default: loadEnvValue('DIANA_BASE_URL') || 'http://localhost:4002'
+                default: loadEnvValue('DIANA_BASE_URL') || process.env.DIANA_SERVER_URL || 'http://localhost:5002'
             },
             {
                 type: 'input',
@@ -328,6 +329,55 @@ program
             console.log(chalk.dim(`  Logged in as: ${globalConfig.email}`));
         }
         console.log('');
+    });
+
+// ================================================================
+//  DAEMON — System command monitoring
+// ================================================================
+program
+    .command('daemon')
+    .description('Manage the DIANA system monitor daemon')
+    .argument('[action]', 'Action to perform (start|status)', 'start')
+    .action(async (action) => {
+        if (action === 'start') {
+            console.log('');
+            console.log(chalk.cyan('  🛡️  DIANA System Monitor — Starting...'));
+            console.log(chalk.dim('  ─────────────────────────────────────────────'));
+
+            const apiKey = loadEnvValue('DIANA_API_KEY');
+            const baseUrl = loadEnvValue('DIANA_BASE_URL');
+            const appName = loadEnvValue('DIANA_APP_NAME') || 'SystemMonitor';
+
+            if (!apiKey || !baseUrl) {
+                console.error(chalk.yellow('  ⚠️  Not configured. Run "diana init" first.'));
+                return;
+            }
+
+            const daemon = createDaemon({ apiKey, baseUrl, appName });
+            
+            try {
+                await daemon.start();
+                console.log(chalk.green('  ✅ Daemon is running and intercepting commands.'));
+                console.log(chalk.dim('  Press Ctrl+C to stop.'));
+                
+                // Keep the process alive
+                process.on('SIGINT', () => {
+                    daemon.stop();
+                    process.exit();
+                });
+            } catch (err) {
+                console.error(chalk.red(`  ❌ Failed to start daemon: ${err.message}`));
+            }
+        } else if (action === 'status') {
+            const historyPath = path.join(require('os').homedir(), 'AppData', 'Roaming', 'Microsoft', 'Windows', 'PowerShell', 'PSReadLine', 'ConsoleHost_history.txt');
+            console.log('');
+            console.log(chalk.cyan('  🛡️  DIANA System Monitor Status'));
+            console.log(chalk.dim('  ─────────────────────────────────────────────'));
+            console.log(`  OS:           ${chalk.green(require('os').platform())}`);
+            console.log(`  History File: ${fs.existsSync(historyPath) ? chalk.green('Detected') : chalk.red('Not Found')}`);
+            console.log(`  Monitoring:   ${chalk.dim('Run "diana daemon start" to begin')}`);
+            console.log('');
+        }
     });
 
 // ================================================================

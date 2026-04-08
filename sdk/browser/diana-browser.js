@@ -9,7 +9,7 @@
 
     function DianaBrowser(config) {
         this.apiKey = config.apiKey;
-        this.baseUrl = config.baseUrl || 'http://localhost:4002';
+        this.baseUrl = config.baseUrl || '';
         this.appName = config.appName || 'BrowserApp';
         this.sessionKey = this._generateSessionKey();
         

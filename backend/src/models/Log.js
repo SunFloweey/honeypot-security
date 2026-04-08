@@ -16,7 +16,7 @@ const Log = sequelize.define('Log', {
         defaultValue: DataTypes.NOW
     },
     method: {
-        type: DataTypes.STRING(10)
+        type: DataTypes.STRING(20)
     },
     path: {
         type: DataTypes.TEXT

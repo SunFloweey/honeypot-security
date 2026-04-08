@@ -53,13 +53,20 @@ const Session = sequelize.define('Session', {
     platform: {
         type: DataTypes.STRING,
         allowNull: true
+    },
+    apiKeyId: {
+        type: DataTypes.UUID,
+        field: 'api_key_id',
+        allowNull: true,
+        references: { model: 'api_keys', key: 'id' }
     }
 }, {
     tableName: 'sessions',
     timestamps: false,
     indexes: [
         { fields: ['ip_address'] },
-        { fields: ['last_seen'] }
+        { fields: ['last_seen'] },
+        { fields: ['api_key_id'] }
     ]
 });
 
