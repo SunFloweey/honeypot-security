@@ -32,12 +32,15 @@ export const useAdminAuth = () => {
         return true;
     }, [logout]);
 
-    // Redirect automatico se non autenticato
+    // Redirect automatico rimosso per evitare loop infiniti o double-redirect.
+    // Viene ora gestito centralmente nei componenti di routing o dashboard.
+    /*
     useEffect(() => {
         if (!getToken()) {
             navigate('/auth-portal');
         }
     }, [navigate, getToken]);
+    */
 
     return { getToken, getUser, logout, checkAuth };
 };

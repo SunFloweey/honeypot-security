@@ -175,7 +175,8 @@ async function startAdminServer() {
         // Test DB connection
         await sequelize.authenticate();
         try {
-            await sequelize.sync(); // Sync models to DB (adds BannedIP table)
+            // Sincronizza i modelli con il DB. 'alter: true' aggiorna le tabelle esistenti (aggiunge colonne mancanti)
+            await sequelize.sync({ alter: true }); 
         } catch(err) {
             console.warn('⚠️ Admin Server DB Sync warning:', err.message);
         }

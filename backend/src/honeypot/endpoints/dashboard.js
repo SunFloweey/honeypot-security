@@ -4,8 +4,22 @@ const { Op, fn, col, literal } = require('sequelize'); // Aggiunto literal per c
 const { Log, Session, ApiKey, Classification, BannedIP } = require('../../models');
 const notificationService = require('../utils/notificationService');
 const ticketService = require('../utils/ticketService');
+const { validate, saasSchemas } = require('../../middleware/validator');
+const rateLimit = require('express-rate-limit');
+
+/**
+ * Dashboard Rate Limiter
+ * Protegge il database da query di aggregazione pesanti.
+ */
+const dashboardLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 50, // Più restrittivo per la dashboard
+    keyGenerator: (req) => req.user?.userId || req.ip,
+    message: { error: 'Troppe richieste. La dashboard ha un limite di sicurezza.' }
+});
 
 const router = express.Router();
+router.use(dashboardLimiter);
 
 /**
  * Helper: Crea filtro where per isolamento tenant
@@ -387,12 +401,16 @@ router.get('/session/:key', async (req, res) => {
     try {
         const tenantClause = await getTenantFilter(req);
 
-        const session = await Session.findByPk(req.params.key, {
+        const session = await Session.findOne({
+            where: { 
+                sessionKey: req.params.key,
+                ...tenantClause // CRITICAL FIX: Isola la sessione stessa per tenant
+            },
             include: [{
                 model: Log,
                 as: 'Logs',
-                where: tenantClause, // Filtra i log della sessione per tenant
-                required: true, // Se non ci sono log accessibili per questo tenant, non restituire la sessione
+                where: tenantClause,
+                required: false, 
                 include: [{
                     model: Classification,
                     as: 'Classifications'
@@ -434,9 +452,9 @@ router.get('/ip/:ip', async (req, res) => {
         // 2. Calcola risk score totale per IP
         const totalRiskScore = logs.reduce((sum, log) => sum + (log.riskScore || 0), 0);
 
-        // 3. Ottieni sessioni associate a questo IP
+        // 3. Ottieni sessioni associate a questo IP (filtrate per tenant)
         const sessions = await Session.findAll({
-            where: { ipAddress },
+            where: { ipAddress, ...tenantClause },
             attributes: ['sessionKey', 'maxRiskScore', 'requestCount', 'firstSeen', 'lastSeen']
         });
 

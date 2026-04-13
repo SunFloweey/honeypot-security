@@ -129,7 +129,8 @@ async function bootstrap() {
         // Sync models
         console.log('⏳ Sincronizzazione modelli DB...');
         try {
-            await sequelize.sync();
+            // Sincronizza i modelli con il DB con 'alter: true' per aggiornare lo schema senza perdita di dati
+            await sequelize.sync({ alter: true });
         } catch (dbErr) {
             console.warn('⚠️ Errore non fatale durante il sync del DB:', dbErr.message);
         }

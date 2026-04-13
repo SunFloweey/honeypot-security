@@ -157,7 +157,23 @@ class DianaClient {
                     }
                 }
 
-                // 2. Canary paths — intrusion detection traps
+                // 2. Dynamic Honeytoken Files — Serve fake credentials automatically
+                const rawPath = decodeURIComponent(reqPath).toLowerCase();
+                if (rawPath.endsWith('.env') || rawPath.endsWith('config.json') || rawPath.includes('aws/credentials')) {
+                    console.warn(`🍯 [DIANA SDK] HONEYTOKEN BAIT ACCESSED: ${reqPath} from ${ip}`);
+                    this.trackEvent('HONEYTOKEN_BAIT_ACCESSED', { path: reqPath, ip }, ip).catch(() => {});
+                    
+                    const tkType = rawPath.includes('aws') ? 'aws' : 'env';
+                    const response = await this.generateHoneytoken(tkType);
+                    
+                    if (response.success && response.token) {
+                        const content = response.token.env || JSON.stringify(response.token, null, 2);
+                        return res.status(200).type('text/plain').send(content);
+                    }
+                    return res.status(404).send('Not Found');
+                }
+
+                // 3. Canary paths — intrusion detection traps
                 if (this.options.canaryPaths.includes(reqPath)) {
                     console.error(`🚨 [DIANA] CANARY TOUCHED: ${reqPath} from ${ip}`);
                     this.trackEvent('CANARY_TOUCHED', { path: reqPath, method: req.method, ip }, ip).catch(() => {});
@@ -170,7 +186,13 @@ class DianaClient {
                 }
 
                 // 3. Suspicious payload analysis
-                const payload = JSON.stringify({ query: req.query, body: req.body });
+                // We monitor Query, Body AND the full URL to catch injections in path parameters
+                const payload = JSON.stringify({ 
+                    url: req.originalUrl,
+                    query: req.query, 
+                    body: req.body 
+                });
+
                 if (this._isSuspicious(payload)) {
                     console.warn(`🛡️  [DIANA] SUSPICIOUS PAYLOAD DETECTED from ${ip}: ${reqPath}`);
                     this.trackEvent('SUSPICIOUS_PAYLOAD', { path: reqPath, payload, ip }, ip).catch(() => {});
@@ -389,10 +411,20 @@ class DianaClient {
      */
     _isSuspicious(text) {
         if (!text) return false;
+
+        // Decode URL-encoded characters (e.g. %2f -> /) to catch encoded attacks
+        let decodedText = text;
+        try {
+            decodedText = decodeURIComponent(text.replace(/\+/g, ' '));
+        } catch (e) {
+            // If decoding fails, continue with raw text
+        }
+
         const patterns = [
             /UNION\s+SELECT/i,
             /<script[\s>]/i,
-            /\.\.\//,
+            /\.\.\//,                 // Path Traversal (Unix)
+            /\.\.\\/,                 // Path Traversal (Windows)
             /DROP\s+TABLE/i,
             /OR\s+1\s*=\s*1/i,
             /SELECT\s+\*\s+FROM/i,
@@ -401,7 +433,7 @@ class DianaClient {
             /\bexec\s*\(/i,
             /\beval\s*\(/i
         ];
-        return patterns.some(p => p.test(text));
+        return patterns.some(p => p.test(decodedText)) || patterns.some(p => p.test(text));
     }
 
     /**

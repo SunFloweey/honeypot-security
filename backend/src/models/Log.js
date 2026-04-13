@@ -8,7 +8,7 @@ const Log = sequelize.define('Log', {
         primaryKey: true
     },
     sessionKey: {
-        type: DataTypes.STRING(32),
+        type: DataTypes.STRING(128),
         field: 'session_key'
     },
     timestamp: {

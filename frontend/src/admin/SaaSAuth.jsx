@@ -56,16 +56,22 @@ const SaaSAuth = () => {
     };
 
     return (
-        <div className="auth-container">
+        <div className="saas-auth-page">
             <style>{`
-                .auth-container {
+                .saas-auth-page {
                     min-height: 100vh;
+                    width: 100vw;
                     display: flex;
                     align-items: center;
                     justify-content: center;
                     background: radial-gradient(circle at top right, #1e293b, #0f172a);
                     font-family: 'Outfit', sans-serif;
                     padding: 2rem;
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    z-index: 9999;
+                    overflow-y: auto;
                 }
                 .auth-card {
                     background: rgba(30, 41, 59, 0.7);
@@ -77,6 +83,7 @@ const SaaSAuth = () => {
                     max-width: 480px;
                     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
                     animation: fadeIn 0.6s ease-out;
+                    margin: auto;
                 }
                 @keyframes fadeIn {
                     from { opacity: 0; transform: translateY(20px); }
@@ -171,6 +178,18 @@ const SaaSAuth = () => {
                     margin-bottom: 1.5rem;
                     font-size: 0.875rem;
                     text-align: center;
+                }
+                @media (max-width: 480px) {
+                    .auth-card {
+                        padding: 1.5rem;
+                        border-radius: 16px;
+                    }
+                    .auth-logo-img {
+                        width: 80px !important;
+                    }
+                    .auth-title {
+                        font-size: 1.4rem;
+                    }
                 }
             `}</style>
 

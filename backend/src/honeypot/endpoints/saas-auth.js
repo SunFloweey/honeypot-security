@@ -19,6 +19,7 @@ const { sequelize } = require('../../config/database');
 const { adminAuthMiddleware } = require('../middleware/adminAuth');
 const provisioningService = require('../utils/provisioningService');
 const SdkBundleService = require('../utils/sdkBundleService');
+const { validate, saasSchemas } = require('../../middleware/validator');
 
 const JWT_SECRET = process.env.JWT_SECRET || process.env.ADMIN_TOKEN;
 const JWT_EXPIRES_IN = '7d';
@@ -63,7 +64,7 @@ async function jwtAuth(req, res, next) {
 // ==========================================
 // PROVISIONING (Admin Only)
 // ==========================================
-router.post('/provision', adminAuthMiddleware, async (req, res) => {
+router.post('/provision', adminAuthMiddleware, validate(saasSchemas.provision), async (req, res) => {
     const { email, name, phoneNumber } = req.body;
 
     if (!email || !name || !phoneNumber) {
@@ -149,7 +150,7 @@ router.get('/tenants', adminAuthMiddleware, async (req, res) => {
 /**
  * PATCH /tenants/:id/status - Sospende o riattiva un cliente
  */
-router.patch('/tenants/:id/status', adminAuthMiddleware, async (req, res) => {
+router.patch('/tenants/:id/status', adminAuthMiddleware, validate(saasSchemas.resourceId, 'params'), async (req, res) => {
     const { isActive } = req.body;
     try {
         const user = await User.findByPk(req.params.id);
@@ -167,7 +168,7 @@ router.patch('/tenants/:id/status', adminAuthMiddleware, async (req, res) => {
 /**
  * DELETE /tenants/:id - Elimina un cliente e le sue chiavi
  */
-router.delete('/tenants/:id', adminAuthMiddleware, async (req, res) => {
+router.delete('/tenants/:id', adminAuthMiddleware, validate(saasSchemas.resourceId, 'params'), async (req, res) => {
     try {
         const user = await User.findByPk(req.params.id);
         if (!user) return res.status(404).json({ success: false, error: 'Cliente non trovato' });
@@ -197,7 +198,7 @@ router.delete('/tenants/:id', adminAuthMiddleware, async (req, res) => {
 // ==========================================
 // LOGIN
 // ==========================================
-router.post('/login', async (req, res) => {
+router.post('/login', validate(saasSchemas.login), async (req, res) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
@@ -278,7 +279,7 @@ router.get('/keys', jwtAuth, async (req, res) => {
 /**
  * POST /keys - Genera una nuova chiave API
  */
-router.post('/keys', jwtAuth, async (req, res) => {
+router.post('/keys', jwtAuth, validate(saasSchemas.apiKey), async (req, res) => {
     const { name } = req.body;
 
     if (!name) {
@@ -326,7 +327,7 @@ router.post('/keys', jwtAuth, async (req, res) => {
 /**
  * DELETE /keys/:id - Revoca (disattiva) una chiave API
  */
-router.delete('/keys/:id', jwtAuth, async (req, res) => {
+router.delete('/keys/:id', jwtAuth, validate(saasSchemas.resourceId, 'params'), async (req, res) => {
     try {
         const apiKey = await ApiKey.findOne({
             where: { id: req.params.id, userId: req.user.userId }

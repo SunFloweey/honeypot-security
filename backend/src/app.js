@@ -35,49 +35,52 @@ app.use(cors({
     credentials: true
 }));
 
-// Headers that suggest vulnerability
+// Headers that suggest vulnerability (Baiting for Honeypot)
+// NOTE: We keep these ONLY for the honeypot part, not for the admin server.
 app.use((req, res, next) => {
-    res.setHeader('X-Powered-By', 'PHP/7.2.34');
-    res.setHeader('Server', 'Apache/2.4.41 (Ubuntu)');
+    // Only spoof headers for paths that are part of the honeypot
+    const isBaitPath = !req.path.startsWith('/api/v1/saas') && !req.path.startsWith('/api/admin');
+    
+    if (isBaitPath) {
+        res.setHeader('X-Powered-By', 'PHP/7.2.34');
+        res.setHeader('Server', 'Apache/2.4.41 (Ubuntu)');
+    } else {
+        res.removeHeader('X-Powered-By');
+    }
     next();
 });
 
 // Serve static files from React frontend
-const distPath = path.join(__dirname, '../../frontend/dist');
+const distPath = path.resolve(__dirname, '../../frontend/dist');
 app.use(express.static(distPath));
 
-// Mount honeypot
+// Mount honeypot (API and bait routes)
 app.use('/', honeypot);
 
-// Handle React routing (catch-all)
+// Handle React routing (catch-all) - CRITICAL for SPA navigation
 app.get('*', (req, res, next) => {
-    // Only serve index.html for non-api, non-file requests
-    const isFileRequest = req.path.includes('.');
+    // 1. Skip if it's an API request (should have been handled by 'honeypot' router)
     const isApiRequest = req.path.startsWith('/api/') || req.path.startsWith('/auth/');
-
-    if (isApiRequest || isFileRequest) {
+    if (isApiRequest) {
         return next();
     }
 
+    // 2. Skip if it's a direct file request that doesn't exist
+    if (req.path.includes('.')) {
+        return next();
+    }
+
+    // 3. Serve index.html for any other route (React Router handles it)
     const indexPath = path.join(distPath, 'index.html');
     if (require('fs').existsSync(indexPath)) {
         res.sendFile(indexPath);
     } else {
-        // Fallback realistico: un finto errore di manutenzione per non rivelare il crash del server
-        res.status(404).send(`
-            <!DOCTYPE html>
-            <html>
-            <head><title>System Maintenance</title></head>
-            <body style="font-family: sans-serif; text-align: center; padding: 50px; background: #f4f4f4;">
-                <div style="background: white; padding: 40px; border-radius: 8px; display: inline-block; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-                    <h1 style="color: #d9534f;">503 - System Maintenance</h1>
-                    <p>The Login Portal is currently undergoing scheduled maintenance.</p>
-                    <p style="color: #777;">Estimated completion: ${new Date(Date.now() + 3600000).toLocaleTimeString()}</p>
-                    <hr>
-                    <p style="font-size: 0.8em; color: #aaa;">Internal System ID: HONEY-SEC-402</p>
-                </div>
-            </body>
-            </html>
+        // Dev Fallback: Se il frontend non è buildato, informa lo sviluppatore
+        res.status(500).send(`
+            <h1>Frontend Not Built</h1>
+            <p>Please run <code>npm run build</code> in the <b>frontend</b> directory.</p>
+            <hr>
+            <p><i>DIANA Debugger: Static path ${distPath} not found.</i></p>
         `);
     }
 });

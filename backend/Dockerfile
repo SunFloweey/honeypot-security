@@ -11,13 +11,15 @@ COPY package*.json ./
 # Installiamo le dipendenze
 RUN npm install
 
-# Copiamo tutto il codice sorgente
-COPY . .
+# Copiamo tutto il codice sorgente (assicurandoci che appartenga all'utente node)
+COPY --chown=node:node . .
 
-# Esponiamo le porte utilizzate dal backend (Honeypot e Dashboard Admin)
+# Passiamo all'utente node prima di avviare il processo
+USER node
+
+# Esponiamo le porte utilizzate dal backend
 EXPOSE 4002
 EXPOSE 4003
 
 # Comando di default per avviare entrambi i server
-# Nota: In produzione sarebbe meglio avere container separati, ma per ora usiamo lo script esistente
 CMD ["npm", "run", "start:both"]

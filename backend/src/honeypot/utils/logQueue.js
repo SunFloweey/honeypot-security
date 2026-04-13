@@ -8,22 +8,43 @@ const Classifier = require('./Classifier');
 class LogQueue {
     constructor() {
         this.buffer = [];
-        this.flushInterval = 5000; // 5 seconds (optimized for quota)
+        this.maxBufferSize = 5000; // Hard limit: backpressure oltre questa soglia
+        this.flushInterval = 5000;
         this.isFlushing = false;
+
+        // Contatore log scartati: logging aggregato per non spammare i log di sistema
+        this.droppedCount = 0;
+        this.droppedLogInterval = setInterval(() => {
+            if (this.droppedCount > 0) {
+                console.error(`[LogQueue][BACKPRESSURE] ${this.droppedCount} log scartati nell'ultimo intervallo. Buffer pieno (max: ${this.maxBufferSize}).`);
+                this.droppedCount = 0;
+            }
+        }, 30000); // Riporta ogni 30 secondi
 
         // Start background worker
         setInterval(() => this.flush(), this.flushInterval);
     }
 
     /**
-     * Enqueue a new log entry
+     * Enqueue a new log entry with backpressure protection.
      * @param {Object} entryData - The complete log and request metadata
      */
     enqueue(entryData) {
-        if (!entryData.req || !entryData.req.sessionKey) {
+        if (!entryData.req || !entryData.req.sessionKey) return;
+
+        if (this.buffer.length >= this.maxBufferSize) {
+            // Backpressure: incrementa il counter ma non logga qui (troppo rumoroso)
+            this.droppedCount++;
             return;
         }
+
         this.buffer.push(entryData);
+    }
+    
+    // Helper per troncare stringhe eccessivamente lunghe (DoS protection)
+    truncate(str, maxLen = 2048) {
+        if (typeof str !== 'string') return str;
+        return str.length > maxLen ? str.substring(0, maxLen) + '...[TRUNCATED]' : str;
     }
 
     /**
@@ -48,7 +69,7 @@ class LogQueue {
                     sessionMap.set(req.sessionKey, {
                         sessionKey: req.sessionKey,
                         ipAddress: req.ipAddress,
-                        userAgent: req.userAgent,
+                        userAgent: this.truncate(req.userAgent, 500),
                         requestCount: 0,
                         lastSeen: new Date(),
                         apiKeyId: apiKeyId || null
@@ -62,8 +83,6 @@ class LogQueue {
             // 2. UPSERT DELLE SESSIONI
             if (sessionMap.size > 0) {
                 const sessionsToUpsert = Array.from(sessionMap.values());
-                // Cerchiamo di includere l'apiKeyId anche nella sessione se il primo log del batch lo ha
-                // Questo aiuta a filtrare le sessioni intere per cliente
                 await Session.bulkCreate(sessionsToUpsert, {
                     updateOnDuplicate: ['requestCount', 'lastSeen'],
                     returning: false
@@ -72,30 +91,30 @@ class LogQueue {
 
             // 3. BULK CREATE LOGS
             const crypto = require('crypto');
-
-            // Regex per validare UUID v4
             const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
             const logRecords = currentBatch
                 .filter(({ req }) => req.sessionKey && req.sessionKey !== 'undefined')
                 .map(({ req, res, apiKeyId }) => {
                     try {
-                        // Validazione UUID difensiva: se req.id non è un UUID valido (es. "sdk_...")
-                        // lo sostituiamo silenziosamente per non far crashare il bulk insert.
                         const safeId = (req.id && UUID_REGEX.test(req.id)) ? req.id : crypto.randomUUID();
+                        
+                        // Sanitizzazione e Troncamento forzato per prevenire DB DoS
+                        const safeBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {});
+                        
                         return {
                             id: safeId,
                             sessionKey: req.sessionKey,
-                            method: req.method,
-                            path: req.path,
-                            queryParams: req.query,
-                            headers: req.headers,
-                            body: typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {}),
+                            method: this.truncate(req.method, 10),
+                            path: this.truncate(req.path, 1024),
+                            queryParams: this.truncate(JSON.stringify(req.query || {}), 2048),
+                            headers: this.truncate(JSON.stringify(req.headers || {}), 4096),
+                            body: this.truncate(safeBody, 8192),
                             ipAddress: req.ipAddress,
                             statusCode: res.statusCode || 500,
                             responseTimeMs: res.durationMs || 0,
-                            responseBody: res.body || null,
-                            fingerprint: req.fingerprint,
+                            responseBody: this.truncate(res.body || '', 4096),
+                            fingerprint: req.fingerprint ? this.truncate(String(req.fingerprint), 64) : null,
                             timestamp: new Date(),
                             apiKeyId: apiKeyId || null
                         };

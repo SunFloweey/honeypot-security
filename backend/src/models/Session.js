@@ -3,7 +3,7 @@ const { sequelize } = require('../config/database');
 
 const Session = sequelize.define('Session', {
     sessionKey: {
-        type: DataTypes.STRING(32),
+        type: DataTypes.STRING(128),
         field: 'session_key',
         primaryKey: true
     },

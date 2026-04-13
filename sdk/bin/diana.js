@@ -40,13 +40,6 @@ program
         console.log('');
 
         const answers = await inquirer.prompt([
-
-
-
-
-
-
-
             {
                 type: 'input',
                 name: 'apiKey',
@@ -69,12 +62,15 @@ program
                     { name: '🔴 High — Maximum protection, isolated terminal, aggressive response', value: 'high' }
                 ],
                 default: 'medium'
+            },
+            {
+                type: 'input',
+                name: 'baseUrl',
+                message: 'DIANA Server URL:',
+                default: process.env.DIANA_SERVER_URL || 'http://localhost:5002',
+                validate: (val) => val.startsWith('http') ? true : 'URL must start with http/https'
             }
         ]);
-
-        // DIANA Server URL: configurabile via ENV per deploy online
-        answers.baseUrl = process.env.DIANA_SERVER_URL || 'http://localhost:5002';
-
 
         // Create .env file with DIANA config
         const envPath = path.resolve(process.cwd(), '.env');
@@ -144,7 +140,7 @@ program
             }
         } catch (error) {
             console.log(chalk.yellow(`  ⚠️  Could not reach server: ${error.message}`));
-            console.log(chalk.dim('     Make sure the DIANA server is running.'));
+            console.log(chalk.dim(`     Make sure the DIANA server is running at ${answers.baseUrl}`));
         }
 
         // Print next steps
@@ -354,12 +350,12 @@ program
             }
 
             const daemon = createDaemon({ apiKey, baseUrl, appName });
-            
+
             try {
                 await daemon.start();
                 console.log(chalk.green('  ✅ Daemon is running and intercepting commands.'));
                 console.log(chalk.dim('  Press Ctrl+C to stop.'));
-                
+
                 // Keep the process alive
                 process.on('SIGINT', () => {
                     daemon.stop();

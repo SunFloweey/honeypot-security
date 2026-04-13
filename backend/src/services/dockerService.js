@@ -1,5 +1,18 @@
 const Docker = require('dockerode');
-const docker = new Docker({ socketPath: '/var/run/docker.sock' });
+
+/**
+ * Connessione Docker tramite proxy TCP (produzione) o socket diretto (sviluppo locale).
+ * In produzione, DOCKER_HOST è settato da docker-compose a tcp://docker_proxy:2375.
+ * Il proxy limita le operazioni permesse (CONTAINERS, IMAGES, EXEC) per sicurezza.
+ */
+const dockerConfig = process.env.DOCKER_HOST
+    ? (() => {
+        const url = new URL(process.env.DOCKER_HOST);
+        return { host: url.hostname, port: parseInt(url.port) };
+    })()
+    : { socketPath: '/var/run/docker.sock' };
+
+const docker = new Docker(dockerConfig);
 
 /**
  * DockerService - Manages high-interaction honeypot containers.

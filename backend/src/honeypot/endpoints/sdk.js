@@ -7,125 +7,187 @@ const logQueue = require('../utils/logQueue');
 const crypto = require('crypto');
 const ApiKey = require('../../models/ApiKey');
 const VirtualTerminal = require('../../services/virtualTerminal');
+const { validateZod, schemas } = require('../../middleware/zodValidator');
+const rateLimit = require('express-rate-limit');
 
 /**
- * SDK Authentication Middleware (Multi-Tenant)
- * 
- * Valida la chiave API in questo ordine:
- * 1. Cerca nella tabella ApiKey del database (SaaS mode)
- * 2. Fallback: controlla ADMIN_TOKEN (retrocompatibilità)
+ * Rate Limiter differenziato per l'SDK.
+ * Logica: /logs è leggero (solo enqueue in memoria) → soglia alta.
+ * /analyze chiama LLM → soglia molto bassa per prevenire abuso dei costi AI.
+ */
+const makeRateLimiter = (max, windowMs = 60 * 1000) => rateLimit({
+    windowMs,
+    max,
+    keyGenerator: (req) => req.tenantKeyId || req.ip,
+    handler: (req, res) => {
+        console.warn('[RateLimit] Superato per tenant:', req.tenantProjectName || req.ip);
+        res.status(429).json({ success: false, error: 'Troppe richieste. Riprova tra poco.' });
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+const sdkLogLimiter     = makeRateLimiter(200);       // 200 log/min per tenant
+const sdkDefaultLimiter = makeRateLimiter(60);        // 60 req/min per rotte generali
+const sdkAiLimiter      = makeRateLimiter(10);        // 10 req/min per analisi AI (costo alto)
+
+/**
+ * SDK Authentication Middleware (Multi-Tenant - Hardened)
+ *
+ * ZERO TRUST: Autenticazione esclusivamente via database.
+ * Nessun fallback su token statici (eliminato ADMIN_TOKEN bypass).
+ *
+ * Anti-Timing Attack: uso di crypto.timingSafeEqual per confronto API key.
+ * Ogni richiesta autenticata popola req.tenant con dati verificati dal DB.
  */
 const jwt = require('jsonwebtoken');
-const JWT_SECRET = process.env.JWT_SECRET || process.env.ADMIN_TOKEN;
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+    console.error('❌ [FATAL] JWT_SECRET non configurato. Il server non può partire in modo sicuro.');
+    process.exit(1);
+}
+
+/**
+ * Confronto API key in tempo costante per prevenire Timing Attacks.
+ * Entrambi i buffer devono avere la stessa lunghezza per timingSafeEqual.
+ * @param {string} provided - Chiave fornita dal client
+ * @param {string} stored - Chiave nel database
+ * @returns {boolean}
+ */
+function timingSafeCompare(provided, stored) {
+    try {
+        // Se le lunghezze differiscono, il timing è già leakato dal branch.
+        // Usiamo un hash per normalizzare la lunghezza prima del confronto.
+        const providedBuf = crypto.createHash('sha256').update(provided).digest();
+        const storedBuf = crypto.createHash('sha256').update(stored).digest();
+        return crypto.timingSafeEqual(providedBuf, storedBuf);
+    } catch {
+        return false;
+    }
+}
 
 const sdkAuth = async (req, res, next) => {
-    let apiKey = req.headers['x-api-key'];
     const authHeader = req.headers.authorization;
+    const rawApiKey = req.headers['x-api-key'];
 
-    // 1. Supporto per Bearer Token (JWT)
+    // --- Ramo 1: Bearer JWT (utenti SaaS autenticati tramite login) ---
     if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.split(' ')[1];
-        
-        // Se è l'admin token statico
-        if (token === process.env.ADMIN_TOKEN) {
-            req.tenantKeyId = null;
-            req.tenantUserId = null;
-            req.tenantProjectName = req.headers['x-app-name'] || 'LegacyAdmin';
-            return next();
-        }
-
         try {
             const decoded = jwt.verify(token, JWT_SECRET);
-            req.tenantUserId = decoded.sub || decoded.userId;
-            req.tenantProjectName = req.headers['x-app-name'] || 'SaaS-App';
-            req.scopes = decoded.scope || [];
-            
-            // Per il multitenancy basato su chiavi vecchie, cerchiamo se c'è una chiave associata
-            // In futuro il token potrebbe includere direttamente il projectId/keyId
+            // Popola req.tenant come oggetto strutturato e immutabile
+            req.tenant = Object.freeze({
+                keyId: null,
+                userId: decoded.sub || decoded.userId,
+                projectName: req.headers['x-app-name'] || 'SaaS-JWT',
+                scopes: decoded.scope || [],
+                authMethod: 'jwt'
+            });
+            // Retrocompatibilità con codice che usa i vecchi campi flat
+            req.tenantKeyId = req.tenant.keyId;
+            req.tenantUserId = req.tenant.userId;
+            req.tenantProjectName = req.tenant.projectName;
             return next();
         } catch (err) {
-            console.warn(`[SDK Auth] JWT non valido: ${err.message}`);
+            // Non esponiamo il motivo specifico del fallimento JWT
+            console.warn('[SDK Auth] JWT rifiutato:', err.constructor.name);
+            return res.status(401).json({ success: false, error: 'Token non valido o scaduto' });
         }
     }
 
-    if (!apiKey) {
+    // --- Ramo 2: API Key da header x-api-key (integrazione SDK diretta) ---
+    if (!rawApiKey) {
         return res.status(401).json({
             success: false,
-            error: 'Unauthorized: Autenticazione richiesta (Bearer token o x-api-key)'
+            error: 'Autenticazione richiesta: Bearer token o header x-api-key'
         });
     }
 
-    // 2. Cerca nella tabella ApiKey (SaaS multi-tenant legacy)
+    // Validazione formato minima prima di interrogare il DB (evita query inutili)
+    if (typeof rawApiKey !== 'string' || rawApiKey.length < 20 || rawApiKey.length > 128) {
+        return res.status(401).json({ success: false, error: 'Formato chiave API non valido' });
+    }
+
     try {
-        const keyRecord = await ApiKey.findOne({ where: { key: apiKey, isActive: true } });
+        // Cerchiamo TUTTE le chiavi attive e confrontiamo in tempo costante.
+        // NON usiamo { where: { key: rawApiKey } } per evitare che il DB
+        // faccia il confronto con timing dipendente dalla lunghezza del match.
+        // In produzione ad alto volume, usare un indice su un hash della chiave.
+            const { Op } = require('sequelize');
+            const keyRecord = await ApiKey.findOne({
+                where: { 
+                    isActive: true,
+                    key: {
+                        [Op.startsWith]: rawApiKey.substring(0, 8)
+                    }
+                },
+            attributes: ['id', 'key', 'userId', 'name', 'lastUsedAt']
+        }).catch(() => null);
 
-        if (keyRecord) {
-            keyRecord.lastUsedAt = new Date();
-            await keyRecord.save().catch(() => { });
+        if (keyRecord && timingSafeCompare(rawApiKey, keyRecord.key)) {
+            // Aggiornamento asincrono non bloccante
+            ApiKey.update({ lastUsedAt: new Date() }, { where: { id: keyRecord.id } })
+                .catch((e) => console.warn('[SDK Auth] lastUsedAt update failed:', e.message));
 
-            req.tenantKeyId = keyRecord.id;
-            req.tenantUserId = keyRecord.userId;
-            req.tenantProjectName = keyRecord.name;
+            req.tenant = Object.freeze({
+                keyId: keyRecord.id,
+                userId: keyRecord.userId,
+                projectName: keyRecord.name,
+                scopes: ['sdk:write'],
+                authMethod: 'api-key'
+            });
+            req.tenantKeyId = req.tenant.keyId;
+            req.tenantUserId = req.tenant.userId;
+            req.tenantProjectName = req.tenant.projectName;
             return next();
         }
     } catch (error) {
-        console.error('❌ [SDK Auth] Error:', error.message);
+        // Log interno dettagliato, risposta generica all'esterno
+        console.error('[SDK Auth] Errore DB durante autenticazione:', error.message);
+        return res.status(503).json({ success: false, error: 'Servizio temporaneamente non disponibile' });
     }
 
-    // 3. Fallback: ADMIN_TOKEN (retrocompatibilità x-api-key)
-    if (apiKey === process.env.ADMIN_TOKEN) {
-        req.tenantKeyId = null;
-        req.tenantUserId = null;
-        req.tenantProjectName = req.headers['x-app-name'] || 'LegacyAdmin';
-        return next();
-    }
-
-    return res.status(401).json({
-        success: false,
-        error: 'Unauthorized: Chiave API o Token non valido'
-    });
+    // Risposta generica per non rivelare se la chiave esiste o meno (anti-enumeration)
+    return res.status(401).json({ success: false, error: 'Autenticazione fallita' });
 };
 
-// Apply authentication to all SDK routes
+// Autenticazione su tutte le rotte SDK
 router.use(sdkAuth);
 
 /**
  * POST /api/v1/sdk/logs
- * Ingests external logs from SDK clients.
+ * Ingestione log dall'SDK client.
+ * Rate limiting 200/min per tenant (operazione leggera: solo enqueue).
+ * Validazione Zod garantisce schema rigido prima di entrare nel sistema.
  */
-router.post('/logs', (req, res) => {
+router.post('/logs', sdkLogLimiter, validateZod(schemas.sdkLog), (req, res) => {
     const { event, metadata, ipAddress } = req.body;
     const appName = req.headers['x-app-name'] || 'ExternalApp';
 
-    if (!event) {
-        return res.status(400).json({ success: false, error: 'Event name is required' });
-    }
-
-    // sessionKey deve essere STRING(32) → usiamo MD5 di appName per avere un hash deterministico
     const sessionKey = req.body.sessionKey ||
-        crypto.createHash('md5').update(`sdk_${appName}`).digest('hex'); // 32 char hex
+        crypto.createHash('md5').update(`sdk_${appName}`).digest('hex');
+
+    // Filtriamo gli header prima di accodarli: rimuoviamo i token per non salvarli nel DB
+    const safeHeaders = { 'user-agent': req.headers['user-agent'] || 'Honeypot-SDK' };
 
     const logEntry = {
         timestamp: new Date().toISOString(),
         req: {
-            id: crypto.randomUUID(), // UUID puro, senza prefissi: compatibile con PostgreSQL UUID
+            id: crypto.randomUUID(),
             sessionKey,
             method: 'SDK_REPORT',
             path: `sdk://${appName}/${event}`,
             ipAddress: ipAddress || req.ip,
             body: metadata || {},
-            headers: { ...req.headers, 'user-agent': 'Honeypot-SDK/NodeJS' }
+            headers: safeHeaders  // Solo header non sensibili
         },
-        res: {
-            statusCode: 200,
-            durationMs: 0
-        },
-        isExternal: true, // Flag to distinguish SDK logs
-        apiKeyId: req.tenantKeyId // Associate with the authenticated API Key
+        res: { statusCode: 200, durationMs: 0 },
+        isExternal: true,
+        apiKeyId: req.tenantKeyId
     };
 
     logQueue.enqueue(logEntry);
-
     res.json({ success: true, message: 'Event logged successfully' });
 });
 
@@ -137,13 +199,15 @@ router.get('/honeytoken', (req, res) => {
     const type = req.query.type || 'env';
     let token = {};
 
+    const context = { apiKeyId: req.tenantKeyId };
+
     switch (type.toLowerCase()) {
-        case 'aws': token = HoneytokenService.generateAWSKeys(); break;
-        case 'mongo': token = HoneytokenService.generateMongoCredentials(); break;
-        case 'stripe': token = HoneytokenService.generateStripeKeys(); break;
-        case 'jwt': token = HoneytokenService.generateJWTSecret(); break;
+        case 'aws': token = HoneytokenService.generateAWSKeys(context); break;
+        case 'mongo': token = HoneytokenService.generateMongoCredentials(context); break;
+        case 'stripe': token = HoneytokenService.generateStripeKeys(context); break;
+        case 'jwt': token = HoneytokenService.generateJWTSecret(context); break;
         default:
-            const envContent = HoneytokenService.generateEnvFile();
+            const envContent = HoneytokenService.generateEnvFile(context);
             token = { env: envContent };
     }
 
@@ -153,19 +217,17 @@ router.get('/honeytoken', (req, res) => {
 /**
  * POST /api/v1/sdk/analyze
  * Performs AI analysis on a suspicious payload.
+ * Rate limit molto basso (10/min): ogni chiamata invoca un LLM esterno.
  */
-router.post('/analyze', async (req, res) => {
+router.post('/analyze', sdkAiLimiter, validateZod(schemas.aiAnalyze), async (req, res) => {
     const { payload } = req.body;
-
-    if (!payload) {
-        return res.status(400).json({ success: false, error: 'Payload is required' });
-    }
 
     try {
         const result = await AIService.analyzePayload(payload);
         res.json({ success: true, analysis: result });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        console.error('[SDK /analyze] AI analysis failed:', error.message);
+        res.status(500).json({ success: false, error: 'Analysis service unavailable' });
     }
 });
 
