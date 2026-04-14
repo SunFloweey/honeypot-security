@@ -21,7 +21,7 @@ class TerminalOrchestrator {
             // Check if container already exists
             const containers = await this.docker.listContainers({ all: true });
             const existingContainer = containers.find(c => c.Names.includes(`/${this.containerName}`));
-            
+
             if (existingContainer) {
                 logger.info(`🔄 Reusing existing sandbox container`);
                 return this.docker.getContainer(this.containerName);
@@ -37,7 +37,7 @@ class TerminalOrchestrator {
 
     async createSandbox() {
         const container = await this.docker.createContainer({
-            Image: 'honeypot-security_sandbox:latest',
+            Image: 'honeypot-security-sandbox:latest',
             name: this.containerName,
             Hostname: 'diana-server',
             HostConfig: {
@@ -67,7 +67,7 @@ class TerminalOrchestrator {
 
     async executeCommand(sessionId, userInput, clientInfo = {}) {
         const startTime = Date.now();
-        
+
         try {
             // 1. Pre-validation
             if (!this.validateCommand(userInput)) {
@@ -85,7 +85,7 @@ class TerminalOrchestrator {
 
             // 3. Get container
             const container = await this.docker.getContainer(this.containerName);
-            
+
             // 4. Execute command
             const exec = await container.exec({
                 Cmd: ['/bin/bash', '-c', userInput],
@@ -105,10 +105,10 @@ class TerminalOrchestrator {
 
             // 5. AI masking
             const finalOutput = await this.maskOutput(userInput, rawOutput);
-            
+
             // 6. Update rate limiting
             this.updateRateLimit(sessionId);
-            
+
             // 7. Complete logging
             const executionTime = Date.now() - startTime;
             this.logCommand(sessionId, userInput, rawOutput, finalOutput, clientInfo, executionTime);
@@ -127,7 +127,7 @@ class TerminalOrchestrator {
         return new Promise((resolve, reject) => {
             let output = '';
             let errorOutput = '';
-            
+
             const timeoutId = setTimeout(() => {
                 stream.destroy();
                 resolve('Command timed out\n');
@@ -182,15 +182,15 @@ class TerminalOrchestrator {
     isRateLimited(sessionId) {
         const now = Date.now();
         const limits = this.rateLimits.get(sessionId) || [];
-        
+
         // Remove old entries (older than 1 minute)
         const recent = limits.filter(time => now - time < 60000);
-        
+
         // Max 10 commands per minute
         if (recent.length >= 10) {
             return true;
         }
-        
+
         return false;
     }
 
@@ -198,7 +198,7 @@ class TerminalOrchestrator {
         const now = Date.now();
         const limits = this.rateLimits.get(sessionId) || [];
         limits.push(now);
-        
+
         // Keep only last minute
         const recent = limits.filter(time => now - time < 60000);
         this.rateLimits.set(sessionId, recent);
@@ -241,7 +241,7 @@ class TerminalOrchestrator {
         };
 
         const errorMessage = error.message || '';
-        
+
         for (const [dockerError, bashError] of Object.entries(errorMap)) {
             if (errorMessage.toLowerCase().includes(dockerError.toLowerCase())) {
                 return bashError;
@@ -264,7 +264,7 @@ class TerminalOrchestrator {
         };
 
         logger.info('🔍 Terminal Command Executed', logEntry);
-        
+
         // Store in history for analysis
         const history = this.commandHistory.get(sessionId) || [];
         history.push(logEntry);
@@ -273,17 +273,17 @@ class TerminalOrchestrator {
 
     calculateRiskScore(command, output) {
         let score = 0;
-        
+
         // High-risk commands
         if (/cat\s+\/etc\/passwd/.test(command)) score += 50;
         if (/wget|curl|nc/.test(command)) score += 30;
         if (/chmod|chown/.test(command)) score += 40;
         if (/ps|top|kill/.test(command)) score += 20;
-        
+
         // Suspicious output
         if (/root|admin|password/.test(output)) score += 25;
         if (/error|denied|failed/.test(output)) score += 15;
-        
+
         return Math.min(score, 100);
     }
 
