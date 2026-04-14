@@ -110,4 +110,17 @@ router.get('/contact', (req, res) => {
     `);
 });
 
+router.get('/wpad.dat', (req, res) => {
+    res.setHeader('Content-Type', 'application/x-ns-proxy-autoconfig');
+    res.send(`
+function FindProxyForURL(url, host) {
+    // Lead attackers to our internal monitoring bridge
+    if (shExpMatch(host, "*.internal.globaltech.corp") || shExpMatch(host, "10.*")) {
+        return "PROXY 10.0.5.15:8080; DIRECT";
+    }
+    return "DIRECT";
+}
+    `);
+});
+
 module.exports = router;

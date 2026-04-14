@@ -22,11 +22,11 @@ const RealAdminLogin = () => {
 
             if (res.ok) {
                 localStorage.setItem('adminToken', token);
-                navigate('/real-dashboard');
+                navigate('/admin-dashboard');
             } else {
                 setError('Invalid Admin Token. This attempt has been logged.');
             }
-        } catch (err) {
+        } catch {
             setError('Connection failed. Is the Admin Server running?');
         } finally {
             setLoading(false);
@@ -77,6 +77,14 @@ const RealAdminLogin = () => {
                     <p style={{ fontSize: '0.75rem', color: '#475569' }}>
                         WARNING: Unauthorized access is strictly prohibited.
                     </p>
+                    <div style={{ marginTop: '1rem' }}>
+                        <span
+                            onClick={() => navigate('/auth-portal')}
+                            style={{ color: '#6366f1', cursor: 'pointer', fontSize: '0.8rem', textDecoration: 'underline' }}
+                        >
+                            Go to User/SaaS Portal
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>

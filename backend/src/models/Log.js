@@ -1,6 +1,5 @@
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/database');
-const Session = require('./Session');
 
 const Log = sequelize.define('Log', {
     id: {
@@ -9,19 +8,15 @@ const Log = sequelize.define('Log', {
         primaryKey: true
     },
     sessionKey: {
-        type: DataTypes.STRING(32),
-        field: 'session_key',
-        references: {
-            model: Session,
-            key: 'session_key'
-        }
+        type: DataTypes.STRING(128),
+        field: 'session_key'
     },
     timestamp: {
         type: DataTypes.DATE,
         defaultValue: DataTypes.NOW
     },
     method: {
-        type: DataTypes.STRING(10)
+        type: DataTypes.STRING(20)
     },
     path: {
         type: DataTypes.TEXT
@@ -71,6 +66,12 @@ const Log = sequelize.define('Log', {
         type: DataTypes.STRING(64),
         field: 'local_ip',
         allowNull: true
+    },
+    apiKeyId: {
+        type: DataTypes.UUID,
+        field: 'api_key_id',
+        allowNull: true,
+        references: { model: 'api_keys', key: 'id' }
     }
 }, {
     tableName: 'logs',
@@ -78,13 +79,16 @@ const Log = sequelize.define('Log', {
     indexes: [
         { fields: ['session_key'] },
         { fields: ['timestamp'] },
-        { fields: ['ip_address'] }
+        { fields: ['ip_address'] },
+        { fields: ['risk_score'] },
+        { fields: ['fingerprint'] }
     ]
 });
 
-// Associations
-Log.belongsTo(Session, { foreignKey: 'sessionKey', targetKey: 'sessionKey' });
-Session.hasMany(Log, { foreignKey: 'sessionKey', sourceKey: 'sessionKey' });
+Log.associate = (models) => {
+    Log.belongsTo(models.Session, { foreignKey: 'sessionKey', targetKey: 'sessionKey' });
+    Log.hasMany(models.Classification, { foreignKey: 'logId', as: 'Classifications' });
+    Log.belongsTo(models.ApiKey, { foreignKey: 'apiKeyId', as: 'apiKey' });
+};
 
 module.exports = Log;
-

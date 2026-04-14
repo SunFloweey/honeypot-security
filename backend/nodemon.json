@@ -1,0 +1,13 @@
+{
+    "verbose": false,
+    "ignore": [
+        "logs/*",
+        "*.log",
+        "node_modules/*",
+        "frontend/*",
+        "src/honeypot/utils/storageAdapter.js",
+        "scripts/*"
+    ],
+    "delay": 1000,
+    "ext": "js,json,html,css"
+}

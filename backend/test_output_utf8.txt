@@ -1,0 +1,29 @@
+﻿
+> honeypot-security-backend@1.0.0 test
+> jest --testTimeout=10000 --detectOpenHandles tests/honeypot.test.js --no-colors
+
+  console.log
+    --- DATABASE CONFIG DEBUG ---
+
+      at Object.log (src/config/database.js:44:9)
+
+  console.log
+    NODE_ENV: test
+
+      at Object.log (src/config/database.js:45:9)
+
+  console.log
+    Selected Env: test
+
+      at Object.log (src/config/database.js:46:9)
+
+  console.log
+    Config Found: true
+
+      at Object.log (src/config/database.js:47:9)
+
+  console.log
+    -----------------------------
+
+      at Object.log (src/config/database.js:51:9)
+

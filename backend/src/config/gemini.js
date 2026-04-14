@@ -1,7 +1,23 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
-// Non serve require('dotenv') qui se lo carichi già in server.js o app.js
+require('dotenv').config();
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY || "");
+const modelName = process.env.GEMINI_MODEL || "gemini-1.5-flash";
 
-module.exports = model;
+const geminiModel = genAI.getGenerativeModel({ 
+    model: modelName,
+    generationConfig: {
+        responseMimeType: "application/json"
+    }
+});
+
+// Modello per testo libero (shell, file finti)
+const geminiTextModel = genAI.getGenerativeModel({ model: modelName });
+
+console.log(`♊ Configurazione IA (Gemini): Model=${modelName}`);
+
+module.exports = {
+    genAI,
+    geminiModel,
+    geminiTextModel
+};

@@ -3,7 +3,7 @@ const { sequelize } = require('../config/database');
 
 const Session = sequelize.define('Session', {
     sessionKey: {
-        type: DataTypes.STRING(32),
+        type: DataTypes.STRING(128),
         field: 'session_key',
         primaryKey: true
     },
@@ -53,15 +53,25 @@ const Session = sequelize.define('Session', {
     platform: {
         type: DataTypes.STRING,
         allowNull: true
+    },
+    apiKeyId: {
+        type: DataTypes.UUID,
+        field: 'api_key_id',
+        allowNull: true,
+        references: { model: 'api_keys', key: 'id' }
     }
 }, {
     tableName: 'sessions',
     timestamps: false,
     indexes: [
         { fields: ['ip_address'] },
-        { fields: ['last_seen'] }
+        { fields: ['last_seen'] },
+        { fields: ['api_key_id'] }
     ]
 });
 
-module.exports = Session;
+Session.associate = (models) => {
+    Session.hasMany(models.Log, { foreignKey: 'sessionKey', sourceKey: 'sessionKey' });
+};
 
+module.exports = Session;

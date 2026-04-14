@@ -10,18 +10,18 @@ if (!SESSION_SALT) {
 }
 
 /**
- * Genera session_key univoca per l'attaccante.
- * Logica: Hash(IP + UserAgent + Salt)
- * Raggruppa le richieste dello stesso bot anche se non supporta cookie.
+ * Genera session_key univoca per l'attaccante o l'utente.
+ * Logica: Hash(IP + UserAgent + Salt + optional UserId)
  * 
  * @param {string} ip - Indirizzo IP reale
  * @param {string} ua - Stringa User-Agent
+ * @param {string} [userId] - ID utente (per isolamento admin/client)
  * @returns {string} - Hash hex SHA256 (primi 32 caratteri)
  */
-function generateSessionKey(ip, ua) {
+function generateSessionKey(ip, ua, userId = '') {
     return crypto
         .createHash('sha256')
-        .update(`${ip}${ua}${SESSION_SALT}`)
+        .update(`${ip}${ua}${userId}${SESSION_SALT}`)
         .digest('hex')
         .substring(0, 32);
 }

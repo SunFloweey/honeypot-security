@@ -11,6 +11,7 @@ export const CONFIG = {
         LEGAL_NAME: "Global Tech Solutions Inc.",
         YEAR: 2026,
         LOGO_LETTER: "G",
+        LOGO_IMAGE: "/vite.svg",
         SUPPORT_EMAIL: "soc-support@globaltech.com",
         SUPPORT_EXT: "ext. 4455"
     },
@@ -32,7 +33,12 @@ export const CONFIG = {
         UPLOAD_LATENCY_MAX: 3000,
         POLLING_MIN: 4000,
         POLLING_MAX: 6000
-    }
+    },
+    // API Base URL
+    // In Docker, we use relative paths so Nginx can proxy correctly.
+    API_BASE_URL: import.meta.env.VITE_API_URL || "",
+    HONEYPOT_URL: import.meta.env.VITE_HONEYPOT_URL || "",
+    WS_URL: import.meta.env.VITE_WS_URL || window.location.origin,
 };
 
 export default CONFIG;

@@ -1,0 +1,39 @@
+# DIANA Sandbox Container - Ultra-Secure Terminal Environment
+FROM ubuntu:22.04
+
+# Installazione strumenti base (appetibili ma limitati)
+RUN apt-get update && apt-get install -y \
+    curl wget net-tools iputils-ping vim nano \
+    coreutils findutils grep gawk \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Creazione utente non-root (Least Privilege Principle)
+RUN useradd -m -s /bin/bash sysadmin \
+    && echo "sysadmin:changeme123" | chpasswd
+
+# Honeytokens - Esche per attaccanti
+RUN mkdir -p /home/sysadmin/.ssh \
+    && echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7... fake-honeypot-key" > /home/sysadmin/.ssh/authorized_keys \
+    && echo "DB_PASSWORD=prod_db_secret_2024" > /home/sysadmin/.env \
+    && echo "API_KEY=sk-1234567890abcdef" > /home/sysadmin/api_keys.txt
+
+# File system finto ma realistico
+RUN mkdir -p /home/sysadmin/{projects,logs,backups} \
+    && echo "# System Configuration" > /home/sysadmin/.bashrc \
+    && echo "export HISTFILE=/home/sysadmin/.bash_history" >> /home/sysadmin/.bashrc \
+    && touch /home/sysadmin/.bash_history \
+    && echo "admin:$(openssl rand -base64 32)" > /home/sysadmin/.htpasswd
+
+# Permessi corretti (prima di diventare sysadmin)
+RUN chown -R sysadmin:sysadmin /home/sysadmin \
+    && chmod 600 /home/sysadmin/.ssh/authorized_keys \
+    && chmod 600 /home/sysadmin/.env \
+    && chmod 755 /home/sysadmin
+
+# Switch to non-root user
+USER sysadmin
+WORKDIR /home/sysadmin
+
+# Comando default - keep container alive
+CMD ["tail", "-f", "/dev/null"]

@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 
 /**
  * Hook per gestire autenticazione admin
@@ -8,27 +8,39 @@ import { useEffect } from 'react';
 export const useAdminAuth = () => {
     const navigate = useNavigate();
 
-    const getToken = () => localStorage.getItem('adminToken');
+    const getToken = useCallback(() => {
+        return localStorage.getItem('saasToken') || localStorage.getItem('adminToken');
+    }, []);
 
-    const logout = () => {
+    const getUser = useCallback(() => {
+        const userJson = localStorage.getItem('user');
+        return userJson ? JSON.parse(userJson) : null;
+    }, []);
+
+    const logout = useCallback(() => {
         localStorage.removeItem('adminToken');
-        navigate('/researcher-login');
-    };
+        localStorage.removeItem('saasToken');
+        localStorage.removeItem('user');
+        navigate('/auth-portal');
+    }, [navigate]);
 
-    const checkAuth = (response) => {
+    const checkAuth = useCallback((response) => {
         if (response.status === 401) {
             logout();
             return false;
         }
         return true;
-    };
+    }, [logout]);
 
-    // Redirect automatico se non autenticato
+    // Redirect automatico rimosso per evitare loop infiniti o double-redirect.
+    // Viene ora gestito centralmente nei componenti di routing o dashboard.
+    /*
     useEffect(() => {
         if (!getToken()) {
-            navigate('/researcher-login');
+            navigate('/auth-portal');
         }
-    }, [navigate]);
+    }, [navigate, getToken]);
+    */
 
-    return { getToken, logout, checkAuth };
+    return { getToken, getUser, logout, checkAuth };
 };

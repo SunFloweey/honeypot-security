@@ -1,6 +1,5 @@
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/database');
-const Log = require('./Log');
 
 const Classification = sequelize.define('Classification', {
     id: {
@@ -10,11 +9,7 @@ const Classification = sequelize.define('Classification', {
     },
     logId: {
         type: DataTypes.UUID,
-        field: 'log_id',
-        references: {
-            model: Log,
-            key: 'id'
-        }
+        field: 'log_id'
     },
     category: {
         type: DataTypes.STRING(50)
@@ -36,9 +31,8 @@ const Classification = sequelize.define('Classification', {
     ]
 });
 
-// Associations
-Classification.belongsTo(Log, { foreignKey: 'logId' });
-Log.hasMany(Classification, { foreignKey: 'logId' });
+Classification.associate = (models) => {
+    Classification.belongsTo(models.Log, { foreignKey: 'logId' });
+};
 
 module.exports = Classification;
-

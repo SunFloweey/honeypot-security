@@ -1,10 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import CONFIG from '../config';
+import InteractiveTerminal from './InteractiveTerminal';
 
 // Pannello admin esca che sembra permettere di cambiare i permessi degli utenti o 
 // vedere i log di sistema finti
 const DecoyAdmin = () => {
+    // Unique session for the attacker (could be IP-based in real scenarios)
+    const sessionKey = localStorage.getItem('attackerSession') || `att-${Math.random().toString(36).substring(7)}`;
+    if (!localStorage.getItem('attackerSession')) {
+        localStorage.setItem('attackerSession', sessionKey);
+    }
+
+    React.useEffect(() => {
+        document.title = `Admin Panel - ${CONFIG.BRAND.NAME}`;
+    }, []);
+// ... rest of the component stats logic ...
     const [stats, setStats] = useState({
         requests: 0,
         threats: 0,
@@ -14,31 +25,26 @@ const DecoyAdmin = () => {
 
     useEffect(() => {
         let timeoutId;
-
         const updateStats = () => {
             setStats(prev => ({
                 ...prev,
                 requests: prev.requests + Math.floor(Math.random() * 5)
             }));
-
-            // Randomize next update based on config
             const delay = CONFIG.TIMING.STATS_UPDATE_MIN + Math.random() * (CONFIG.TIMING.STATS_UPDATE_MAX - CONFIG.TIMING.STATS_UPDATE_MIN);
             timeoutId = setTimeout(updateStats, delay);
         };
-
         updateStats();
         return () => clearTimeout(timeoutId);
     }, []);
 
     return (
         <div className="dashboard-layout">
-            {/* Sidebar */}
+            {/* Sidebar omitted for brevity but remains the same */}
             <aside className="dashboard-sidebar">
                 <div className="sidebar-logo-container">
-                    <div className="nav-logo">{CONFIG.BRAND.LOGO_LETTER}</div>
+                    <img src={CONFIG.BRAND.LOGO_IMAGE} alt="Logo" className="nav-logo" style={{ width: '28px', height: '28px' }} />
                     <span className="font-bold">{CONFIG.BRAND.NAME}</span>
                 </div>
-
                 <nav className="sidebar-nav">
                     <Link to="/admin" className="sidebar-link active">Dashboard</Link>
                     <Link to="/admin/servers" className="sidebar-link">Server Management</Link>
@@ -46,14 +52,12 @@ const DecoyAdmin = () => {
                     <Link to="/admin/logs" className="sidebar-link">Security Logs</Link>
                     <Link to="/upload" className="sidebar-link">Asset Deployment</Link>
                 </nav>
-
                 <div className="sidebar-footer mt-auto">
                     <p className="font-tiny text-muted mb-0">LOGGED AS</p>
                     <p className="font-small font-bold">it-admin@{CONFIG.BRAND.NAME.toLowerCase().replace(/\s/g, '')}.com</p>
                 </div>
             </aside>
 
-            {/* Main Content */}
             <main className="dashboard-main">
                 <header className="flex justify-between items-center mb-2">
                     <div>
@@ -121,15 +125,9 @@ const DecoyAdmin = () => {
                         </div>
                     </section>
 
-                    <aside className="card terminal-card">
-                        <h3 className="mb-2" style={{ color: 'white' }}>Terminal Audit</h3>
-                        <div className="terminal-view">
-                            <p className="terminal-line terminal-success">[SYSTEM] Authenticated as admin</p>
-                            <p className="terminal-line terminal-info">[INFO] Checking integrity scan...</p>
-                            <p className="terminal-line terminal-warn">[WARN] Legacy DB (10.0.4.12) is reaching quota</p>
-                            <p className="terminal-line terminal-info">[AUDIT] 5 login failures monitored from external IP</p>
-                            <p className="terminal-line terminal-success">{'>'} _</p>
-                        </div>
+                    <aside className="card p-2" style={{ background: '#000', borderRadius: '8px' }}>
+                        <h3 className="mb-2" style={{ color: 'white' }}>Audit Terminal (Restricted)</h3>
+                        <InteractiveTerminal sessionKey={sessionKey} />
                     </aside>
                 </div>
             </main>

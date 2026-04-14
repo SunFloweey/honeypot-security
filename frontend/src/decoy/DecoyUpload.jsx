@@ -4,6 +4,10 @@ import CONFIG from '../config';
 
 // Interfaccia per il caricamento file che sembra accettare file pericolosi
 const DecoyUpload = () => {
+    React.useEffect(() => {
+        document.title = `Asset Deployment - ${CONFIG.BRAND.NAME}`;
+    }, []);
+
     const [file, setFile] = useState(null);
     const [status, setStatus] = useState('');
     const [uploading, setUploading] = useState(false);
@@ -29,7 +33,12 @@ const DecoyUpload = () => {
             <nav className="nav-standard">
                 <div className="nav-content">
                     <Link to="/" className="nav-brand">
-                        <div className="nav-logo">{CONFIG.BRAND.LOGO_LETTER}</div>
+                        <img
+                            src={CONFIG.BRAND.LOGO_IMAGE}
+                            alt={`${CONFIG.BRAND.NAME} Logo`}
+                            className="nav-logo"
+                            style={{ width: '28px', height: '28px' }}
+                        />
                         <span className="font-bold">{CONFIG.BRAND.NAME}</span>
                     </Link>
                     <div className="font-small">Employee: it-admin@{CONFIG.BRAND.NAME.toLowerCase().replace(/\s/g, '')}.com</div>

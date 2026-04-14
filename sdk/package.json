@@ -1,0 +1,46 @@
+{
+  "name": "@diana-security/sdk",
+  "version": "1.0.0",
+  "description": "DIANA Security SDK - Deceptive Infrastructure & Active Network Armor. Honeypot protection for Node.js applications.",
+  "main": "index.js",
+  "bin": {
+    "diana": "./bin/diana.js"
+  },
+  "files": [
+    "index.js",
+    "lib/",
+    "bin/",
+    "browser/",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node -e \"const d = require('./'); console.log('SDK loaded:', typeof d.createClient === 'function' ? 'OK' : 'FAIL');\""
+  },
+  "keywords": [
+    "diana",
+    "honeypot",
+    "security",
+    "intrusion-detection",
+    "deception",
+    "cybersecurity",
+    "middleware",
+    "express",
+    "threat-detection"
+  ],
+  "dependencies": {
+    "axios": "^1.6.0",
+    "chalk": "^4.1.2",
+    "commander": "^11.1.0",
+    "dotenv": "^16.3.0",
+    "inquirer": "^8.2.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "author": "DIANA Security Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/diana-security/sdk"
+  }
+}

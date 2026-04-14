@@ -1,0 +1,98 @@
+[
+  {
+    "id": "sdk_0bd03ae7-a6b7-444f-a6c1-a395e6c325fb",
+    "sessionKey": "test_session_final",
+    "method": "SDK_REPORT",
+    "path": "sdk://ExternalApp/verification_dashboard",
+    "headers": {
+      "accept": "application/json, text/plain, */*",
+      "content-type": "application/json",
+      "x-api-key": "hp_sk_928eba7ed6116054bd8874ba9ce9a3c6f0198a6127d2ddca",
+      "user-agent": "Honeypot-SDK/NodeJS",
+      "content-length": "126",
+      "accept-encoding": "gzip, compress, deflate, br",
+      "host": "localhost:4002",
+      "connection": "keep-alive"
+    },
+    "body": "{\"status\":\"success\",\"solved_by\":\"Antigravity\"}",
+    "ipAddress": "::1",
+    "statusCode": 200,
+    "responseTimeMs": 0,
+    "responseBody": null,
+    "timestamp": "2026-03-02T11:33:27.495Z",
+    "apiKeyId": "96aa492e-c4a2-4fb3-865c-99a37fbc43d4"
+  },
+  {
+    "id": "d9b27044-e928-441d-b2aa-8c22faf0e5dd",
+    "sessionKey": "7dd30706f1d988825b4d0b13270f57dd",
+    "method": "POST",
+    "path": "/logs",
+    "queryParams": {},
+    "headers": {
+      "accept": "application/json, text/plain, */*",
+      "content-type": "application/json",
+      "x-api-key": "hp_sk_928eba7ed6116054bd8874ba9ce9a3c6f0198a6127d2ddca",
+      "user-agent": "axios/1.13.5",
+      "content-length": "126",
+      "accept-encoding": "gzip, compress, deflate, br",
+      "host": "localhost:4002",
+      "connection": "keep-alive"
+    },
+    "body": "{\"event\":\"verification_dashboard\",\"metadata\":{\"status\":\"success\",\"solved_by\":\"Antigravity\"},\"sessionKey\":\"[REDACTED]\"}",
+    "ipAddress": "::1",
+    "statusCode": 200,
+    "responseTimeMs": 285,
+    "responseBody": null,
+    "fingerprint": "eaef48383c5df7aecfaa850b2b9a191292e0ccf5d37489cdfc22fdba89ff3305",
+    "timestamp": "2026-03-02T11:33:27.495Z",
+    "apiKeyId": "96aa492e-c4a2-4fb3-865c-99a37fbc43d4"
+  },
+  {
+    "id": "sdk_3ac37d8f-bd98-41af-ba67-2ad926342e0f",
+    "sessionKey": "s",
+    "method": "SDK_REPORT",
+    "path": "sdk://ExternalApp/t",
+    "headers": {
+      "accept": "application/json, text/plain, */*",
+      "content-type": "application/json",
+      "x-api-key": "hp_sk_928eba7ed6116054bd8874ba9ce9a3c6f0198a6127d2ddca",
+      "user-agent": "Honeypot-SDK/NodeJS",
+      "content-length": "44",
+      "accept-encoding": "gzip, compress, deflate, br",
+      "host": "localhost:4002",
+      "connection": "keep-alive"
+    },
+    "body": "{}",
+    "ipAddress": "::1",
+    "statusCode": 200,
+    "responseTimeMs": 0,
+    "responseBody": null,
+    "timestamp": "2026-03-02T11:35:57.728Z",
+    "apiKeyId": "96aa492e-c4a2-4fb3-865c-99a37fbc43d4"
+  },
+  {
+    "id": "f1275da7-c0a0-402a-a868-ab1a26fae528",
+    "sessionKey": "7dd30706f1d988825b4d0b13270f57dd",
+    "method": "POST",
+    "path": "/logs",
+    "queryParams": {},
+    "headers": {
+      "accept": "application/json, text/plain, */*",
+      "content-type": "application/json",
+      "x-api-key": "hp_sk_928eba7ed6116054bd8874ba9ce9a3c6f0198a6127d2ddca",
+      "user-agent": "axios/1.13.5",
+      "content-length": "44",
+      "accept-encoding": "gzip, compress, deflate, br",
+      "host": "localhost:4002",
+      "connection": "keep-alive"
+    },
+    "body": "{\"event\":\"t\",\"metadata\":{},\"sessionKey\":\"[REDACTED]\"}",
+    "ipAddress": "::1",
+    "statusCode": 200,
+    "responseTimeMs": 421,
+    "responseBody": null,
+    "fingerprint": "eaef48383c5df7aecfaa850b2b9a191292e0ccf5d37489cdfc22fdba89ff3305",
+    "timestamp": "2026-03-02T11:35:57.728Z",
+    "apiKeyId": "96aa492e-c4a2-4fb3-865c-99a37fbc43d4"
+  }
+]

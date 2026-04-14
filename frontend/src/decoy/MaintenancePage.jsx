@@ -1,16 +1,23 @@
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import CONFIG from '../config';
 
 const MaintenancePage = ({ title, code, message }) => {
-    const location = useLocation();
+    // Genera valori random una sola volta per render stabile e puro
+    const requestId = useMemo(() => Math.random().toString(36).substring(7).toUpperCase(), []);
+    const nodeNum = useMemo(() => Math.floor(Math.random() * 9), []);
 
     return (
         <div className="app-wrapper">
             <nav className="nav-standard">
                 <div className="nav-content">
                     <Link to="/" className="nav-brand">
-                        <div className="nav-logo">{CONFIG.BRAND.LOGO_LETTER}</div>
+                        <img
+                            src={CONFIG.BRAND.LOGO_IMAGE}
+                            alt={`${CONFIG.BRAND.NAME} Logo`}
+                            className="nav-logo"
+                            style={{ width: '28px', height: '28px' }}
+                        />
                         <span className="font-bold">{CONFIG.BRAND.NAME}</span>
                     </Link>
                 </div>
@@ -41,7 +48,7 @@ const MaintenancePage = ({ title, code, message }) => {
                 </div>
 
                 <p className="font-tiny text-muted mt-2" style={{ opacity: 0.6 }}>
-                    Request ID: {Math.random().toString(36).substring(7).toUpperCase()} | Node: GT-SO-0{Math.floor(Math.random() * 9)}
+                    Request ID: {requestId} | Node: GT-SO-0{nodeNum}
                 </p>
             </main>
 

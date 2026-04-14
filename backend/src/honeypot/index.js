@@ -2,6 +2,8 @@
 const express = require('express');
 const { requestCaptureMiddleware: honeyLoggerMiddleware } = require('./middleware/honeyLogger');
 const { responseDelayMiddleware, adaptiveDelayMiddleware } = require('./middleware/responseDelay');
+const { adaptiveDecoyMiddleware } = require('./middleware/adaptiveDecoy');
+const { isolationMiddleware, canaryMiddleware } = require('./middleware/securityEnforcement');
 
 // Import endpoint routers
 const authEndpoints = require('./endpoints/auth');
@@ -15,25 +17,47 @@ const { adminAuthMiddleware } = require('./middleware/adminAuth');
 const publicEndpoints = require('./endpoints/public');
 const protectedEndpoints = require('./endpoints/protected');
 const intelEndpoints = require('./endpoints/intel');
+const aiAnalysisEndpoints = require('./endpoints/ai-analysis');
+const fakeDashboard = require('./endpoints/ai-fakedashboard');
+const sdkEndpoints = require('./endpoints/sdk');
+const { router: terminalEndpoints, commandInjectionCatcher } = require('./endpoints/terminal');
+const { router: saasAuthEndpoints } = require('./endpoints/saas-auth');
+const { Log } = require('../models');
 
 const router = express.Router();
 
+router.use((req, res, next) => {
+    if (req.path.startsWith('/api')) {
+        console.log(`[DEBUG] Honeypot Router: ${req.method} ${req.path}`);
+    }
+    next();
+});
+
 // ==========================================
-// MIDDLEWARE GLOBALI HONEYPOT
+// MIDDLEWARE GLOBALI HONEYPOT (ATTACKERS ONLY)
 // ==========================================
 
-// 1. Cattura ogni dettaglio della richiesta (Disattivato qui perché è già globale in app.js)
-// router.use(honeyLoggerMiddleware);
+// 0. CANARY – rileva accesso a file/path reali e attiva Auto-Protezione
+router.use(canaryMiddleware);
 
-// 2. Simula latenza realistica
+// 1. Simula latenza realistica (Solo per rotte non gestite sopra)
 router.use(responseDelayMiddleware);
 
-// 3. Rallenta attaccanti aggressivi (opzionale)
+// 2. Rallenta attaccanti aggressivi (opzionale)
 router.use(adaptiveDelayMiddleware);
+
+// 3. Detect OS command injection in ANY request parameter
+router.use(commandInjectionCatcher);
+
+// 4. Force Isolation/Deception for high-risk sessions
+router.use(isolationMiddleware);
 
 // ==========================================
 // MOUNT ENDPOINT GROUPS
 // ==========================================
+
+// 0. Virtual Terminal & Webshells (High priority to avoid /admin conflicts)
+router.use('/', terminalEndpoints);
 
 // Auth endpoints (/login, /register, /reset-password)
 router.use('/auth', authEndpoints);
@@ -45,14 +69,40 @@ router.use('/admin', adminEndpoints);
 router.use('/administrator', adminEndpoints);
 router.use('/wp-admin', adminEndpoints); // WordPress target popolare
 
-// API endpoints (/api/users, /api/posts, ecc.) - HONEYPOT BAIT
-router.use('/api', apiEndpoints);
+// 1. PUBLIC/TRAP API ROUTES (No Auth)
+router.use('/api/intel', intelEndpoints); // WebRTC leaks, etc.
 
-// Real Dashboard API (Authenticated) - DATA SOURCES
+// SDK ENDPOINTS (Priorità alta, prima della trappola IA)
+router.use('/api/v1/sdk', sdkEndpoints);
+
+// Montiamo la trappola IA DOPO gli endpoint SDK
+router.use('/api/v1', fakeDashboard);
+
+// Montiamo l'ambiente reale SaaS Auth (Login, Registrazione, Gestione Tenant)
+router.use('/api/v1/saas', saasAuthEndpoints);
+
+router.use('/api', apiEndpoints);          // Public bait (/api/users, etc.)
+
+// 2. PROTECTED ADMIN ROUTES (Auth Required)
+router.use('/api/ai', adminAuthMiddleware, aiAnalysisEndpoints);
+
+// Endpoint di check accessibile per monitoraggio (Richiede Auth per verifica token reale)
+router.get('/api/db-check', adminAuthMiddleware, async (req, res) => {
+    try {
+        const count = await Log.count();
+        res.json({ 
+            success: true, 
+            status: 'connected', 
+            logs: count 
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: 'Database unavailable' });
+    }
+});
+
+// Tutte le altre rotte dashboard richiedono auth admin/saas
 router.use('/api', adminAuthMiddleware, dashboardEndpoints);
 
-// Intelligence Endpoints (De-anonymization)
-router.use('/api/intel', intelEndpoints);
 
 // ==========================================
 // PROTECTED ENDPOINTS (403/401 - Realistic Security)
@@ -68,16 +118,15 @@ router.use('/', exposedEndpoints);
 // Legacy endpoints (*.php, *.asp, /cgi-bin)
 router.use('/', legacyEndpoints);
 
-// NOTE: Admin dashboard is now on separate server (admin-server.js:4003)
-
 // ==========================================
 // PUBLIC ENDPOINTS (200 OK - Legitimate Facade)
 // ==========================================
 router.use('/', publicEndpoints);
 
 // ==========================================
-// ROOT ENDPOINTS (Now handled by React, but kept for API/Health)
+// ADAPTIVE DECOYS (AI Dynamic Bait)
 // ==========================================
+router.use(adaptiveDecoyMiddleware);
 
 // Health check (ma vulnerabile a info disclosure)
 router.get('/health', (req, res) => {
