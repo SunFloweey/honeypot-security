@@ -145,22 +145,13 @@ const DashboardSidebar = ({
                 
                 {/* API Keys: Solo per i clienti SaaS (per gestire i loro siti) */}
                 {!user?.isGlobal && !localStorage.getItem('adminToken') && (
-                    <>
-                        <button
-                            className={`sidebar-link ${view === 'api_keys' ? 'active' : ''}`}
-                            onClick={() => setView('api_keys')}
-                            style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
-                        >
-                            🔑 API Keys Management
-                        </button>
-                        <button
-                            className={`sidebar-link ${view === 'sdk_setup' ? 'active' : ''}`}
-                            onClick={() => setView('sdk_setup')}
-                            style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
-                        >
-                            📦 SDK Setup
-                        </button>
-                    </>
+                    <button
+                        className={`sidebar-link ${view === 'api_keys' ? 'active' : ''}`}
+                        onClick={() => setView('api_keys')}
+                        style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
+                    >
+                        🔑 API Keys Management
+                    </button>
                 )}
 
                 {/* Client Management: Solo per l'Admin globale (Tu) */}

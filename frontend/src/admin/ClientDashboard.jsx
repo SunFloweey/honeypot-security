@@ -50,14 +50,14 @@ const ClientDashboard = () => {
         riskFilter, debouncedIP, debouncedFingerprint, 50, dateFilter, order
     );
 
-    // Effetto per attivare onboarding se non ci sono log
-    React.useEffect(() => {
-        if (!loading && totalLogs === 0 && view === 'overview') {
-            setShowOnboarding(true);
-        } else if (totalLogs > 0) {
-            setShowOnboarding(false);
-        }
-    }, [totalLogs, loading, view]);
+    // Tutorial disabilitato per i clienti - rimuovo l'onboarding automatico
+    // React.useEffect(() => {
+    //     if (!loading && totalLogs === 0 && view === 'overview') {
+    //         setShowOnboarding(true);
+    //     } else if (totalLogs > 0) {
+    //         setShowOnboarding(false);
+    //     }
+    // }, [totalLogs, loading, view]);
 
     const { setSSEStatus } = usePollingManager(fetchData);
 

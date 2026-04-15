@@ -295,6 +295,73 @@ app.use(client.monitor());`}
                     </div>
                 </div>
             )}
+
+            {/* INSTALLAZIONE DIANA - COMANDI NPM */}
+            {user?.role === 'user' && (
+                <div className="card terminal-card mt-2" style={{ padding: '1.5rem', border: '1px solid var(--researcher-green)' }}>
+                    <h3 style={{ color: 'var(--researcher-green)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span>Installa DIANA nella tua Piattaforma</span>
+                    </h3>
+                    <p className="text-muted mb-2">Segui questi comandi in ordine per integrare DIANA nel tuo progetto con npm.</p>
+
+                    <div style={{ background: '#0f172a', padding: '1rem', borderRadius: '8px', border: '1px solid #1e293b', marginBottom: '1rem' }}>
+                        <h4 style={{ color: '#38bdf8', fontSize: '0.9rem', marginBottom: '1rem' }}>1. Installazione Pacchetti</h4>
+                        <div className="terminal-view" style={{ backgroundColor: '#000', padding: '1rem', borderRadius: '4px', fontFamily: 'monospace' }}>
+                            <div style={{ color: '#10b981' }}>$ npm install @diana/sdk express cors helmet</div>
+                            <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop: '0.5rem' }}># Installa DIANA SDK e le dipendenze essenziali</div>
+                        </div>
+                    </div>
+
+                    <div style={{ background: '#0f172a', padding: '1rem', borderRadius: '8px', border: '1px solid #1e293b', marginBottom: '1rem' }}>
+                        <h4 style={{ color: '#38bdf8', fontSize: '0.9rem', marginBottom: '1rem' }}>2. Configurazione Iniziale</h4>
+                        <div className="terminal-view" style={{ backgroundColor: '#000', padding: '1rem', borderRadius: '4px', fontFamily: 'monospace' }}>
+                            <div style={{ color: '#10b981' }}>$ npm init -y</div>
+                            <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop: '0.5rem' }}># Inizializza package.json se non esiste</div>
+                            <div style={{ color: '#10b981', marginTop: '1rem' }}>$ touch .env</div>
+                            <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop: '0.5rem' }}># Crea file environment per la chiave API</div>
+                        </div>
+                    </div>
+
+                    <div style={{ background: '#0f172a', padding: '1rem', borderRadius: '8px', border: '1px solid #1e293b', marginBottom: '1rem' }}>
+                        <h4 style={{ color: '#38bdf8', fontSize: '0.9rem', marginBottom: '1rem' }}>3. Variabili Ambiente (.env)</h4>
+                        <div className="terminal-view" style={{ backgroundColor: '#000', padding: '1rem', borderRadius: '4px', fontFamily: 'monospace' }}>
+                            <div style={{ color: '#f59e0b' }}>DIANA_API_KEY={keys[0]?.key || 'INSERISCI_TUA_CHIAVE'}</div>
+                            <div style={{ color: '#f59e0b', marginTop: '0.5rem' }}>DIANA_ENDPOINT=https://api.diana-security.com</div>
+                            <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop: '0.5rem' }}># Configura le credenziali DIANA</div>
+                        </div>
+                    </div>
+
+                    <div style={{ background: '#0f172a', padding: '1rem', borderRadius: '8px', border: '1px solid #1e293b', marginBottom: '1rem' }}>
+                        <h4 style={{ color: '#38bdf8', fontSize: '0.9rem', marginBottom: '1rem' }}>4. Integrazione Codice</h4>
+                        <div className="terminal-view" style={{ backgroundColor: '#000', padding: '1rem', borderRadius: '4px', fontFamily: 'monospace' }}>
+                            <div style={{ color: '#10b981' }}>$ touch server.js</div>
+                            <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop: '0.5rem' }}># Crea il file principale del server</div>
+                            <div style={{ color: '#10b981', marginTop: '1rem' }}>$ nano server.js</div>
+                            <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop: '0.5rem' }}># Apri editor per incollare il codice DIANA</div>
+                        </div>
+                    </div>
+
+                    <div style={{ background: '#0f172a', padding: '1rem', borderRadius: '8px', border: '1px solid #1e293b', marginBottom: '1rem' }}>
+                        <h4 style={{ color: '#38bdf8', fontSize: '0.9rem', marginBottom: '1rem' }}>5. Avvio Server</h4>
+                        <div className="terminal-view" style={{ backgroundColor: '#000', padding: '1rem', borderRadius: '4px', fontFamily: 'monospace' }}>
+                            <div style={{ color: '#10b981' }}>$ node server.js</div>
+                            <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop: '0.5rem' }}># Avvia il server con DIANA attiva</div>
+                            <div style={{ color: '#10b981', marginTop: '1rem' }}>$ npm start</div>
+                            <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop: '0.5rem' }}># Oppure usa script package.json</div>
+                        </div>
+                    </div>
+
+                    <div style={{ background: '#0f172a', padding: '1rem', borderRadius: '8px', border: '1px solid #1e293b' }}>
+                        <h4 style={{ color: '#38bdf8', fontSize: '0.9rem', marginBottom: '1rem' }}>6. Verifica Installazione</h4>
+                        <div className="terminal-view" style={{ backgroundColor: '#000', padding: '1rem', borderRadius: '4px', fontFamily: 'monospace' }}>
+                            <div style={{ color: '#10b981' }}>$ curl http://localhost:3000/admin</div>
+                            <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop: '0.5rem' }}># Testa esca admin (dovrebbe loggare tentativo)</div>
+                            <div style={{ color: '#10b981', marginTop: '1rem' }}>$ curl http://localhost:3000/api/secret</div>
+                            <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop: '0.5rem' }}># Testa esca API endpoint</div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

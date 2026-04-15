@@ -18,6 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const chalk = require('chalk');
 const { createDaemon } = require('../index');
+const { DEFAULT_BASE_URL } = require('../lib/config');
 
 const program = new Command();
 
@@ -27,11 +28,11 @@ program
     .version('1.0.0');
 
 // ================================================================
-//  INIT — Quick setup (no login required, just API key + URL)
+//  INIT — Quick setup (no login required, just API key)
 // ================================================================
 program
     .command('init')
-    .description('Initialize DIANA SDK in your project (configure server URL + API key)')
+    .description('Initialize DIANA SDK in your project (configure API key)')
     .action(async () => {
         console.log('');
         console.log(chalk.cyan('╔══════════════════════════════════════════════════════════╗'));
@@ -62,15 +63,11 @@ program
                     { name: '🔴 High — Maximum protection, isolated terminal, aggressive response', value: 'high' }
                 ],
                 default: 'medium'
-            },
-            {
-                type: 'input',
-                name: 'baseUrl',
-                message: 'DIANA Server URL:',
-                default: process.env.DIANA_SERVER_URL || 'http://localhost:5002',
-                validate: (val) => val.startsWith('http') ? true : 'URL must start with http/https'
             }
         ]);
+
+        // Use pre-configured base URL from the SDK
+        const baseUrl = process.env.DIANA_BASE_URL || process.env.DIANA_SERVER_URL || DEFAULT_BASE_URL || 'http://localhost:5002';
 
         // Create .env file with DIANA config
         const envPath = path.resolve(process.cwd(), '.env');
@@ -83,7 +80,7 @@ program
 
         const updates = {
             'DIANA_API_KEY': answers.apiKey,
-            'DIANA_BASE_URL': answers.baseUrl.replace(/\/$/, ''),
+            'DIANA_BASE_URL': baseUrl.replace(/\/$/, ''),
             'DIANA_APP_NAME': answers.appName,
             'DIANA_SECURITY_LEVEL': answers.securityLevel,
             'DIANA_AUTO_PROTECT': answers.securityLevel !== 'low' ? 'true' : 'false'
@@ -128,7 +125,7 @@ program
                 ? { 'Authorization': `Bearer ${answers.apiKey}`, 'X-App-Name': answers.appName }
                 : { 'x-api-key': answers.apiKey, 'X-App-Name': answers.appName };
 
-            const response = await axios.post(`${answers.baseUrl}/api/v1/sdk/logs`, {
+            const response = await axios.post(`${baseUrl}/api/v1/sdk/logs`, {
                 event: 'SDK_INIT',
                 metadata: { cli: true, framework: 'generic', securityLevel: answers.securityLevel }
             }, { headers, timeout: 10000 });
@@ -140,7 +137,7 @@ program
             }
         } catch (error) {
             console.log(chalk.yellow(`  ⚠️  Could not reach server: ${error.message}`));
-            console.log(chalk.dim(`     Make sure the DIANA server is running at ${answers.baseUrl}`));
+            console.log(chalk.dim(`     Make sure the DIANA server is running at ${baseUrl}`));
         }
 
         // Print next steps
@@ -168,12 +165,6 @@ program
         const answers = await inquirer.prompt([
             {
                 type: 'input',
-                name: 'serverUrl',
-                message: 'DIANA Server URL:',
-                default: loadEnvValue('DIANA_BASE_URL') || process.env.DIANA_SERVER_URL || 'http://localhost:5002'
-            },
-            {
-                type: 'input',
                 name: 'email',
                 message: 'Email:'
             },
@@ -184,9 +175,11 @@ program
             }
         ]);
 
+        const serverUrl = loadEnvValue('DIANA_BASE_URL') || process.env.DIANA_BASE_URL || process.env.DIANA_SERVER_URL || DEFAULT_BASE_URL || 'http://localhost:5002';
+
         try {
             console.log(chalk.blue('\n  Authenticating...'));
-            const response = await axios.post(`${answers.serverUrl}/api/v1/saas/login`, {
+            const response = await axios.post(`${serverUrl}/api/v1/saas/login`, {
                 email: answers.email,
                 password: answers.password
             }, { timeout: 10000 });
@@ -196,7 +189,7 @@ program
 
                 // Save token to home directory config
                 saveGlobalConfig({
-                    serverUrl: answers.serverUrl,
+                    serverUrl: serverUrl,
                     token,
                     email: answers.email
                 });

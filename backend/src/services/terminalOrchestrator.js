@@ -41,6 +41,7 @@ class TerminalOrchestrator {
             name: this.containerName,
             Hostname: 'diana-server',
             HostConfig: {
+
                 NetworkMode: 'honeypot-security_isolated_network',
                 Memory: 256 * 1024 * 1024, // 256MB
                 CpuQuota: 20000, // 0.2 CPU
