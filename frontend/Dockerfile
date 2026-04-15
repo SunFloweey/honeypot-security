@@ -1,9 +1,10 @@
 # FASE 1: Build
 # Usiamo Node per compilare il codice React/Vite
-FROM node:22-alpine AS build-stage
+FROM node:22-slim AS build-stage
 WORKDIR /app
 COPY package*.json ./
-RUN npm install
+RUN --mount=type=cache,target=/root/.npm \
+    npm install --no-audit --no-fund
 COPY . .
 RUN npm run build
 

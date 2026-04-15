@@ -57,3 +57,5 @@ secure_vault/
 
 # Chiavi RSA nei moduli
 *.pem
+node_modules
+node_modules

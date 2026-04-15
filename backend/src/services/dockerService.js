@@ -25,7 +25,8 @@ class DockerService {
     static activeContainers = new Map();
 
     // Config
-    static IMAGE = 'ubuntu';
+    // Usiamo l'immagine sandbox definita nel docker-compose per i terminali reali
+    static IMAGE = 'honeypot-security-sandbox';
     static CONTAINER_TTL = 15 * 60 * 1000; // 15 minutes of inactivity
     static MAX_CONTAINERS = 50;
 

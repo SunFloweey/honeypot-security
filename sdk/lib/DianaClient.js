@@ -2,6 +2,7 @@ const axios = require('axios');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { DEFAULT_BASE_URL } = require('./config');
 
 // Load .env if available (won't crash if dotenv is not installed in the host project)
 try { require('dotenv').config(); } catch (e) { /* dotenv optional for host */ }
@@ -39,7 +40,7 @@ class DianaClient {
     constructor(config = {}) {
         // Support both 'apiKey' and legacy 'token' parameter names
         this.apiKey = config.apiKey || config.token || process.env.DIANA_API_KEY || process.env.HONEYPOT_TOKEN;
-        this.baseUrl = config.baseUrl || process.env.DIANA_BASE_URL || process.env.HONEYPOT_BASE_URL;
+        this.baseUrl = config.baseUrl || process.env.DIANA_BASE_URL || process.env.HONEYPOT_BASE_URL || DEFAULT_BASE_URL;
         this.appName = config.appName || process.env.DIANA_APP_NAME || process.env.HONEYPOT_APP_NAME || 'DianaApp';
 
         if (!this.apiKey) {
